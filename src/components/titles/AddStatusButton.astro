@@ -1,0 +1,87 @@
+---
+// Botão "+ Add" que vira badge verde com dropdown de ajustes.
+// Usado em Detalhes do Título, Explore e Lista. O estado vem do Supabase no cliente.
+interface Props {
+  tmdbId: number;
+  mediaType: 'movie' | 'tv';
+  title: string;
+  posterPath: string | null;
+}
+
+const { tmdbId, mediaType, title, posterPath } = Astro.props;
+---
+
+<div
+  class="add-status"
+  data-add-status
+  data-tmdb-id={tmdbId}
+  data-media-type={mediaType}
+  data-title={title}
+  data-poster-path={posterPath ?? ''}
+>
+  <button type="button" class="add-button" data-add hidden>+ Add</button>
+  <button type="button" class="status-badge" data-badge hidden aria-haspopup="dialog" aria-label={`${title} is in your lists. Open options`}>
+    <span aria-hidden="true">✓</span>
+  </button>
+  <dialog class="popover" data-menu aria-label={`Options for ${title}`}>
+    <div class="menu" data-menu-items></div>
+  </dialog>
+</div>
+
+<style>
+  .add-status {
+    display: inline-flex;
+  }
+
+  .add-button,
+  .status-badge {
+    height: 36px;
+    border-radius: 999px;
+    font-size: 0.9375rem;
+    cursor: pointer;
+  }
+
+  .add-button {
+    padding-inline: 14px;
+    border: 1px solid var(--color-border-strong);
+    background-color: var(--color-surface-raised);
+    color: var(--color-text);
+  }
+
+  .add-button:hover {
+    background-color: var(--color-surface-hover);
+  }
+
+  .status-badge {
+    width: 36px;
+    border: 1px solid var(--color-success-border);
+    background-color: var(--color-success-solid);
+    color: var(--color-on-solid);
+    font-weight: 700;
+  }
+
+  .status-badge.is-entering {
+    animation: badge-in 260ms ease-out;
+  }
+
+  .add-button:disabled,
+  .status-badge:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+
+  @keyframes badge-in {
+    from {
+      transform: scale(0.6);
+      opacity: 0;
+    }
+  }
+</style>
+
+<script>
+  import { initAddStatus } from '../../lib/lists/add-status';
+
+  document.querySelectorAll<HTMLElement>('[data-add-status]').forEach((root) => {
+    void initAddStatus(root);
+  });
+</script>

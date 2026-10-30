@@ -1,0 +1,314 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+
+const LIST_NAMES: Record<string, string> = {
+	to_watch: 'To watch',
+	watched: 'Watched',
+	favorites: 'Favorites',
+};
+
+const kind = Astro.params.kind ?? '';
+if (!(kind in LIST_NAMES)) {
+	return Astro.redirect('/');
+}
+const name = LIST_NAMES[kind];
+---
+
+<AppLayout>
+	<section class="list" data-kind={kind}>
+		<header class="list-header">
+			<a class="back" href="/">← Back</a>
+			<h1>{name}</h1>
+			<button type="button" class="filter-button" id="filter-button" aria-haspopup="dialog" aria-label="Filter and sort">
+				<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+					<path d="M3 5h18M6 12h12M10 19h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
+				</svg>
+			</button>
+		</header>
+
+		<dialog class="popover" id="filter-menu" aria-label="Filter and sort">
+			<div class="menu">
+				<p class="menu-section-title">Streaming</p>
+				<div id="streaming-options" class="menu"></div>
+				<p class="menu-section-title">Order</p>
+				<div id="order-options" class="menu"></div>
+			</div>
+		</dialog>
+
+		<div id="empty-list" class="empty" hidden>
+			<p id="empty-list-text">Nothing here yet.</p>
+			<a id="empty-list-cta" class="cta" href="/explore">Go to Explore</a>
+		</div>
+
+		<div id="empty-filter" class="empty" hidden>
+			<p>No titles match these filters.</p>
+			<button type="button" class="clear" id="clear-filters">Clear filters</button>
+		</div>
+
+		<div id="grid" class="grid" role="list"></div>
+	</section>
+
+	<script>
+		import { supabase } from '../../lib/supabase.js';
+		import { getListItems, getUserStreamings, type ListItem, type StreamingRow, type SystemKind } from '../../lib/lists/store';
+		import { posterUrl } from '../../lib/tmdb/images';
+		import { enableLightDismiss, openPopover } from '../../lib/ui/popover';
+		import { isBackNavigation, loadScreenState, saveScreenState } from '../../lib/ui/navigation';
+		import { brandName } from '../../lib/streaming/canonical';
+
+		const section = document.querySelector<HTMLElement>('.list')!;
+		const kind = section.dataset.kind as SystemKind;
+		const grid = document.getElementById('grid') as HTMLDivElement;
+		const emptyList = document.getElementById('empty-list') as HTMLDivElement;
+		const emptyListText = document.getElementById('empty-list-text') as HTMLParagraphElement;
+		const emptyListCta = document.getElementById('empty-list-cta') as HTMLAnchorElement;
+		const emptyFilter = document.getElementById('empty-filter') as HTMLDivElement;
+		const filterButton = document.getElementById('filter-button') as HTMLButtonElement;
+		const filterMenu = document.getElementById('filter-menu') as HTMLDialogElement;
+		const streamingOptions = document.getElementById('streaming-options') as HTMLDivElement;
+		const orderOptions = document.getElementById('order-options') as HTMLDivElement;
+
+		type Order = 'newest' | 'oldest';
+
+		const state: { streamingBrand: string | null; order: Order } = { streamingBrand: null, order: 'newest' };
+		const STATE_KEY = `aurora:list:${kind}`;
+		let items: ListItem[] = [];
+		let streamings: StreamingRow[] = [];
+
+		// Disponibilidade de cada título em streamings (cache por sessão de página).
+		const availability = new Map<string, Promise<Set<number>>>();
+		const keyOf = (item: ListItem) => `${item.mediaType}:${item.tmdbId}`;
+
+		const brandsFor = (item: ListItem) => {
+			const key = keyOf(item);
+			if (!availability.has(key)) {
+				availability.set(
+					key,
+					fetch(`/api/titles/${item.mediaType}/${item.tmdbId}/providers`)
+						.then((response) => response.json() as Promise<{ brands: string[] }>)
+						.then((data) => new Set(data.brands))
+						.catch(() => new Set<number>()),
+				);
+			}
+			return availability.get(key)!;
+		};
+
+		const applyFilters = async (): Promise<ListItem[]> => {
+			const ordered = state.order === 'newest' ? items : [...items].reverse();
+			if (state.streamingBrand === null) return ordered;
+
+			const selected = state.streamingBrand;
+			const matches = await Promise.all(ordered.map((item) => brandsFor(item)));
+			return ordered.filter((_, index) => matches[index].has(selected));
+		};
+
+		const renderCard = (item: ListItem) => {
+			const link = document.createElement('a');
+			link.className = 'poster-card';
+			link.href = `/title/${item.mediaType}/${item.tmdbId}`;
+			link.setAttribute('role', 'listitem');
+			link.setAttribute('aria-label', item.title);
+
+			const poster = posterUrl(item.posterPath);
+			if (poster) {
+				const img = document.createElement('img');
+				img.src = poster;
+				img.alt = '';
+				img.loading = 'lazy';
+				link.append(img);
+			} else {
+				const silhouette = document.createElement('span');
+				silhouette.className = 'silhouette';
+				silhouette.textContent = item.title;
+				link.append(silhouette);
+			}
+			return link;
+		};
+
+		const renderGrid = async () => {
+			saveScreenState(STATE_KEY, state);
+			const visible = await applyFilters();
+			grid.replaceChildren(...visible.map(renderCard));
+
+			emptyList.hidden = items.length > 0;
+			emptyFilter.hidden = items.length === 0 || visible.length > 0;
+			grid.hidden = items.length > 0 && visible.length === 0;
+		};
+
+		const renderMenu = () => {
+			const option = (label: string, selected: boolean, onClick: () => void) => {
+				const button = document.createElement('button');
+				button.type = 'button';
+				button.className = `menu-item${selected ? ' menu-item--check' : ''}`;
+				button.textContent = label;
+				button.addEventListener('click', onClick);
+				return button;
+			};
+
+			streamingOptions.replaceChildren(
+				option('All streamings', state.streamingBrand === null, () => choose(null)),
+				...streamings.map((row) => {
+					const brand = brandName(row.providerName);
+					return option(brand, state.streamingBrand === brand, () => choose(brand));
+				}),
+			);
+
+			orderOptions.replaceChildren(
+				option('Newest', state.order === 'newest', () => chooseOrder('newest')),
+				option('Oldest', state.order === 'oldest', () => chooseOrder('oldest')),
+			);
+		};
+
+		// Streaming é seleção única: escolher um novo substitui o anterior.
+		const choose = async (streamingBrand: string | null) => {
+			state.streamingBrand = streamingBrand;
+			renderMenu();
+			await renderGrid();
+		};
+
+		const chooseOrder = async (order: Order) => {
+			state.order = order;
+			renderMenu();
+			await renderGrid();
+		};
+
+		document.getElementById('clear-filters')?.addEventListener('click', async () => {
+			state.streamingBrand = null;
+			state.order = 'newest';
+			renderMenu();
+			await renderGrid();
+		});
+
+		filterButton.addEventListener('click', () => openPopover(filterMenu, filterButton));
+		enableLightDismiss(filterMenu);
+
+		const load = async () => {
+			const { data: sessionData } = await supabase.auth.getSession();
+			if (!sessionData.session) {
+				window.location.replace('/login');
+				return;
+			}
+
+			try {
+				// Ao voltar de um título, mantém o streaming e a ordenação escolhidos.
+				const saved = isBackNavigation() ? loadScreenState<typeof state>(STATE_KEY) : null;
+				if (saved) Object.assign(state, saved);
+
+				[items, streamings] = await Promise.all([getListItems(kind), getUserStreamings()]);
+				renderMenu();
+				await renderGrid();
+			} catch (error) {
+				console.error(error);
+				emptyList.hidden = false;
+				emptyListText.textContent = 'We could not load this list. Try again later.';
+				emptyListCta.hidden = true;
+			}
+		};
+
+		load();
+	</script>
+</AppLayout>
+
+<style is:global>
+	.list {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.list-header {
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
+		align-items: center;
+	}
+
+	.list-header h1 {
+		grid-column: 2;
+		margin: 0;
+		font-size: 1.75rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.back {
+		justify-self: start;
+		color: var(--color-text-muted);
+		text-decoration: none;
+	}
+
+	.filter-button {
+		grid-column: 3;
+		justify-self: end;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border-radius: 999px;
+		border: 1px solid var(--color-border-strong);
+		background-color: var(--color-surface-raised);
+		color: var(--color-text);
+		cursor: pointer;
+	}
+
+	.empty {
+		margin: 32px 0;
+		text-align: center;
+		color: var(--color-text-muted);
+	}
+
+	.cta {
+		display: inline-block;
+		margin-top: 12px;
+		padding: 10px 18px;
+		border-radius: 999px;
+		background-color: var(--color-solid);
+		color: var(--color-on-solid);
+		font-weight: 600;
+		text-decoration: none;
+	}
+
+	.clear {
+		margin-top: 8px;
+		padding: 8px 14px;
+		border-radius: 999px;
+		border: 1px solid var(--color-border-strong);
+		background-color: var(--color-surface-raised);
+		color: var(--color-text);
+		cursor: pointer;
+	}
+
+	.grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+		gap: 16px;
+	}
+
+	.poster-card {
+		display: block;
+		text-decoration: none;
+		color: inherit;
+		aspect-ratio: 2 / 3;
+		border-radius: 12px;
+		overflow: hidden;
+		background-color: var(--color-surface-raised);
+		border: 1px solid var(--color-border);
+	}
+
+	.poster-card img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.silhouette {
+		display: flex;
+		height: 100%;
+		align-items: flex-end;
+		padding: 10px;
+		font-size: 0.875rem;
+		color: var(--color-text-muted);
+		background-image: linear-gradient(180deg, var(--color-surface-hover), var(--color-surface-raised));
+	}
+</style>

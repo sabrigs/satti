@@ -1,0 +1,74 @@
+---
+// Navbar: logo à esquerda; no desktop, "My lists" e "Explore" e o avatar à direita.
+// No mobile, a navegação vai para a toolbar inferior (BottomNav) e o avatar fica no header.
+import AvatarMenu from './AvatarMenu.astro';
+
+const path = Astro.url.pathname;
+const current = (href: string) => (path === href ? 'page' : undefined);
+---
+
+<header class="app-header">
+	<a class="logo" href="/">Aurora</a>
+	<nav class="desktop-nav" aria-label="Main">
+		<a href="/" aria-current={current('/')}>My lists</a>
+		<a href="/explore" aria-current={current('/explore')}>Explore</a>
+	</nav>
+	<div class="avatar-slot">
+		<AvatarMenu />
+	</div>
+</header>
+
+<style>
+	.app-header {
+		display: flex;
+		align-items: center;
+		gap: 24px;
+		position: sticky;
+		top: 0;
+		z-index: 20;
+		height: 64px;
+		padding-inline: 16px;
+		border-bottom: 1px solid var(--color-border);
+		background-color: var(--color-bg);
+	}
+
+	.logo {
+		font-family: 'Times New Roman', Times, serif;
+		font-size: 1.5rem;
+		color: var(--color-text);
+		text-decoration: none;
+	}
+
+	.desktop-nav {
+		display: flex;
+		gap: 8px;
+		margin-left: auto;
+	}
+
+	.desktop-nav a {
+		padding: 8px 12px;
+		border-radius: 8px;
+		color: var(--color-text-muted);
+		text-decoration: none;
+	}
+
+	.desktop-nav a[aria-current='page'],
+	.desktop-nav a:hover {
+		color: var(--color-text);
+		background-color: var(--color-surface-hover);
+	}
+
+	.avatar-slot {
+		margin-left: 8px;
+	}
+
+	@media (max-width: 767px) {
+		.desktop-nav {
+			display: none;
+		}
+
+		.avatar-slot {
+			margin-left: auto;
+		}
+	}
+</style>

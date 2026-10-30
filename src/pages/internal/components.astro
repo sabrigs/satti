@@ -1,0 +1,244 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Button from '../../components/ui/Button.astro';
+import Badge from '../../components/ui/Badge.astro';
+import InputField from '../../components/ui/InputField.astro';
+import Title from '../../components/ui/Title.astro';
+import InputText from '../../components/forms/InputText.astro';
+import ComponentCard from '../../components/catalog/ComponentCard.astro';
+import AddStatusButton from '../../components/titles/AddStatusButton.astro';
+import '../../styles/popover.css';
+import { semanticTokens, successPalettes, successTokens } from '../../styles/tokens';
+import type { SuccessPaletteName } from '../../styles/tokens';
+
+// Página interna: não linkada no site e marcada como noindex.
+const successNames = Object.keys(successPalettes) as SuccessPaletteName[];
+const tokens = semanticTokens('dark', 'green');
+const tokenNames = Object.keys(tokens);
+
+// Tokens de destaque de cada escala, para trocar ao vivo no catálogo.
+const palettes = Object.fromEntries(successNames.map((name) => [name, successTokens('dark', name)]));
+---
+
+<Layout>
+	<Fragment slot="head">
+		<meta name="robots" content="noindex, nofollow" />
+	</Fragment>
+
+	<main>
+		<header class="page-header">
+			<h1>Catálogo de componentes</h1>
+			<p>Visualização interna dos componentes e dos tokens de cor da Aurora (Radix Colors, escala dark).</p>
+		</header>
+
+		<section class="controls" aria-label="Ajustes de tokens">
+			<label>
+				Destaque de sucesso
+				<select id="success-palette">
+					{successNames.map((name) => (
+						<option value={name} selected={name === 'green'}>{name}</option>
+					))}
+				</select>
+			</label>
+			<Button id="copy-tokens" variant="secondary" size="small">Copiar tokens (CSS)</Button>
+			<span id="copy-status" role="status" aria-live="polite"></span>
+		</section>
+
+		<h2 class="group-title">Tokens de cor</h2>
+		<div class="token-grid">
+			{tokenNames.map((token) => (
+				<div class="token">
+					<span class="token__swatch" style={`background: var(${token});`} aria-hidden="true"></span>
+					<div>
+						<code>{token}</code>
+						<small data-token-value={token}>{tokens[token]}</small>
+					</div>
+				</div>
+			))}
+		</div>
+
+		<h2 class="group-title">Componentes de UI</h2>
+		<div class="cards">
+			<ComponentCard name="Button" path="components/ui/Button.astro" description="Variantes primary e secondary, tamanhos small, medium e large.">
+				<Button label="Primary" />
+				<Button variant="secondary" label="Secondary" />
+				<Button disabled label="Disabled" />
+				<Button size="small" label="Small" />
+				<Button size="large" label="Large" />
+			</ComponentCard>
+
+			<ComponentCard name="AddStatusButton" path="components/titles/AddStatusButton.astro" description="Add/status + dropdown. Mostra o estado real só com login; sem sessão fica oculto.">
+				<AddStatusButton tmdbId={1} mediaType="movie" title="Sample title" posterPath={null} />
+			</ComponentCard>
+
+			<ComponentCard name="Badge" path="components/ui/Badge.astro" description="Estado positivo (adicionado / assistido) e erro.">
+				<Badge>Assistido</Badge>
+				<Badge variant="danger" label="Erro" />
+			</ComponentCard>
+
+			<ComponentCard name="Title" path="components/ui/Title.astro" description="Título principal das telas de entrada.">
+				<Title>Welcome</Title>
+			</ComponentCard>
+
+			<ComponentCard name="InputField" path="components/ui/InputField.astro" description="Campo base, sem label.">
+				<InputField type="email" placeholder="Email" aria-label="Email" />
+			</ComponentCard>
+		</div>
+
+		<h2 class="group-title">Componentes de formulário</h2>
+		<div class="cards">
+			<ComponentCard name="InputText" path="components/forms/InputText.astro" description="Campo com label e placeholder.">
+				<div class="form-sample">
+					<InputText label="Name" placeholder="How you rather be called?" />
+					<p class="form-error">Mensagem de erro de exemplo.</p>
+				</div>
+			</ComponentCard>
+		</div>
+	</main>
+
+	<script define:vars={{ palettes, tokenNames }}>
+		const root = document.documentElement;
+		const select = document.getElementById('success-palette');
+		const copyButton = document.getElementById('copy-tokens');
+		const copyStatus = document.getElementById('copy-status');
+		const valueLabels = document.querySelectorAll('[data-token-value]');
+
+		const readToken = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+
+		const applyPalette = (name) => {
+			for (const [prop, value] of Object.entries(palettes[name])) {
+				root.style.setProperty(prop, value);
+			}
+			valueLabels.forEach((label) => {
+				label.textContent = readToken(label.dataset.tokenValue);
+			});
+		};
+
+		select.addEventListener('change', () => applyPalette(select.value));
+
+		copyButton.addEventListener('click', async () => {
+			const css = `:root {\n${tokenNames
+				.map((name) => `  ${name}: ${readToken(name)};`)
+				.join('\n')}\n}`;
+			try {
+				await navigator.clipboard.writeText(css);
+				copyStatus.textContent = 'Tokens copiados.';
+			} catch {
+				copyStatus.textContent = 'Não foi possível copiar.';
+			}
+		});
+	</script>
+</Layout>
+
+<style>
+	main {
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+		max-width: 1100px;
+		margin-inline: auto;
+		padding: 16px;
+	}
+
+	.page-header h1 {
+		margin: 0 0 8px;
+		font-size: 2rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.page-header p,
+	small {
+		color: var(--color-text-muted);
+	}
+
+	.controls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 16px;
+		padding: 16px;
+		border-radius: 12px;
+		background-color: var(--color-surface);
+		border: 1px solid var(--color-border);
+	}
+
+	.controls label {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	select {
+		height: 36px;
+		padding-inline: 8px;
+		border-radius: 8px;
+		border: 1px solid var(--color-border-strong);
+		background-color: var(--color-surface-raised);
+		color: var(--color-text);
+		font-size: 0.95rem;
+	}
+
+	.group-title {
+		margin: 8px 0 0;
+		font-size: 1.25rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.token-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+		gap: 12px;
+	}
+
+	.token {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 12px;
+		border-radius: 12px;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-surface);
+	}
+
+	.token__swatch {
+		flex-shrink: 0;
+		width: 40px;
+		height: 40px;
+		border-radius: 8px;
+		border: 1px solid var(--color-border-strong);
+	}
+
+	.token div {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	code {
+		overflow-wrap: anywhere;
+		font-size: 0.85rem;
+		color: var(--color-text);
+	}
+
+	.cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+		gap: 16px;
+	}
+
+	.form-sample {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		width: 100%;
+		max-width: 300px;
+	}
+
+	.form-error {
+		margin: 0;
+		font-size: 0.875rem;
+		color: var(--color-danger-text);
+	}
+</style>

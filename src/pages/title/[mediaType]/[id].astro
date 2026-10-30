@@ -1,0 +1,238 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+import AddStatusButton from '../../../components/titles/AddStatusButton.astro';
+import { getTitleDetails, isInBrazilTheaters, type TitleDetails } from '../../../lib/tmdb/titles';
+import { getTitleStreamingProviders, type StreamingProvider } from '../../../lib/streaming/availability';
+import { logoUrl, posterUrl } from '../../../lib/tmdb/images';
+import type { MediaType } from '../../../lib/tmdb/client';
+
+const mediaType = Astro.params.mediaType;
+const id = Number(Astro.params.id);
+
+if ((mediaType !== 'movie' && mediaType !== 'tv') || !Number.isInteger(id)) {
+	return Astro.redirect('/');
+}
+
+let details: TitleDetails;
+let providers: StreamingProvider[];
+let inTheaters: boolean;
+try {
+	[details, providers, inTheaters] = await Promise.all([
+		getTitleDetails(mediaType as MediaType, id),
+		getTitleStreamingProviders(mediaType as MediaType, id).catch(() => []),
+		isInBrazilTheaters(mediaType as MediaType, id).catch(() => false),
+	]);
+} catch {
+	return Astro.redirect('/');
+}
+
+const category = details.mediaType === 'movie' ? 'Movie' : 'Series';
+const duration = details.runtime
+	? details.runtime >= 60
+		? `${Math.floor(details.runtime / 60)}h ${details.runtime % 60}min`
+		: `${details.runtime}min`
+	: null;
+const genre = details.genres.slice(0, 2).join(', ') || null;
+const rating = details.voteAverage > 0 ? `★ ${details.voteAverage.toFixed(1)}` : null;
+const metadata = [category, duration, genre, rating].filter(Boolean).join(' · ');
+
+const backdrop = details.backdropPath ? `https://image.tmdb.org/t/p/w1280${details.backdropPath}` : null;
+const poster = posterUrl(details.posterPath, 'w342');
+---
+
+<AppLayout>
+	<article class="title" style={backdrop ? `--backdrop: url("${backdrop}");` : undefined}>
+		<div class="title-bar">
+			<a class="back" href="/" data-back>← Back</a>
+			<AddStatusButton tmdbId={details.id} mediaType={details.mediaType} title={details.title} posterPath={details.posterPath} />
+		</div>
+
+		<div class="hero">
+			{poster && <img class="hero-poster" src={poster} alt={`Poster of ${details.title}`} />}
+			<div class="hero-text">
+				<h1>{details.title}</h1>
+				<p class="metadata">{metadata}</p>
+			</div>
+		</div>
+
+		{(inTheaters || providers.length > 0) && (
+			<section class="block" aria-labelledby="available-on">
+				<h2 id="available-on">Available on</h2>
+				{inTheaters ? (
+					<ul class="providers">
+						<li class="theater-chip">In theaters</li>
+					</ul>
+				) : (
+					<ul class="providers">
+						{providers.map((provider) => (
+							<li>
+								{provider.logoPath ? (
+									<img src={logoUrl(provider.logoPath, 'w92') ?? ''} alt="" width="40" height="40" />
+								) : null}
+								<span>{provider.name}</span>
+							</li>
+						))}
+					</ul>
+				)}
+			</section>
+		)}
+
+		{details.overview && (
+			<section class="block" aria-labelledby="about">
+				<h2 id="about">About</h2>
+				<p class="about">{details.overview}</p>
+			</section>
+		)}
+
+		{details.cast.length > 0 && (
+			<section class="block" aria-labelledby="cast">
+				<h2 id="cast">Cast</h2>
+				<ul class="cast">
+					{details.cast.map((member) => (
+						<li>
+							<span class="cast-name">{member.name}</span>
+							{member.character && <span class="cast-role">{member.character}</span>}
+						</li>
+					))}
+				</ul>
+			</section>
+		)}
+	</article>
+</AppLayout>
+
+<style>
+	.title {
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+	}
+
+	.title-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.back {
+		color: var(--color-text-muted);
+		text-decoration: none;
+	}
+
+	.hero {
+		position: relative;
+		display: flex;
+		align-items: flex-end;
+		gap: 24px;
+		min-height: 260px;
+		padding: 24px;
+		border-radius: 16px;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-surface);
+		background-image: var(--backdrop, none);
+		background-size: cover;
+		background-position: center;
+		overflow: hidden;
+	}
+
+	.hero::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(180deg, #00000000 0%, var(--color-bg) 100%);
+		pointer-events: none;
+	}
+
+	.hero > * {
+		position: relative;
+	}
+
+	.hero-poster {
+		flex-shrink: 0;
+		width: 110px;
+		aspect-ratio: 2 / 3;
+		border-radius: 12px;
+		object-fit: cover;
+		box-shadow: 0 8px 24px #00000080;
+	}
+
+	h1 {
+		margin: 0 0 8px;
+		font-size: 2rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.metadata,
+	.about,
+	.cast-role {
+		color: var(--color-text-muted);
+	}
+
+	.block {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	h2 {
+		margin: 0;
+		font-size: 1.125rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.providers,
+	.cast {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 12px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.providers li {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 12px 6px 6px;
+		border-radius: 999px;
+		background-color: var(--color-surface-raised);
+		color: var(--color-text);
+		font-size: 0.875rem;
+	}
+
+	.providers img {
+		border-radius: 8px;
+	}
+
+	.theater-chip {
+		background-color: var(--color-success-bg);
+		border: 1px solid var(--color-success-border);
+		color: var(--color-success-text);
+		font-weight: 600;
+	}
+
+	.cast li {
+		display: flex;
+		flex-direction: column;
+		min-width: 120px;
+	}
+
+	.cast-name {
+		color: var(--color-text);
+	}
+
+	.about {
+		margin: 0;
+		line-height: 1.5;
+	}
+</style>
+
+<script>
+	import { bindBackLink } from '../../../lib/ui/navigation';
+
+	const back = document.querySelector<HTMLAnchorElement>('[data-back]');
+	if (back) bindBackLink(back);
+</script>

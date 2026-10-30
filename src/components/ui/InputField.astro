@@ -1,0 +1,26 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+type Props = HTMLAttributes<'input'>;
+
+const { class: className, ...attrs } = Astro.props;
+---
+
+<input {...attrs} class:list={['input-field', className]} />
+
+<style>
+  .input-field {
+    height: 48px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+    box-shadow: 0 2px 5px 0 #0000001f;
+    padding-inline: 16px;
+    font-size: 1rem;
+  }
+
+  .input-field::placeholder {
+    color: var(--color-text-muted);
+  }
+</style>

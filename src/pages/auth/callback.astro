@@ -1,0 +1,45 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout>
+  <main>
+    <h1>Confirmando seu acesso...</h1>
+    <p id="message">Estamos verificando seu link.</p>
+
+    <script>
+      import { supabase } from '../../lib/supabase.js';
+
+      const message = document.querySelector('#message');
+
+      async function confirmLogin() {
+        const { data, error } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error(error);
+        }
+
+        if (data.session) {
+          // Primeiro login: passa pelo onboarding antes da Home.
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('onboarding_completed')
+            .eq('user_id', data.session.user.id)
+            .single();
+
+          window.location.replace(profile?.onboarding_completed ? '/' : '/onboarding');
+          return;
+        }
+
+        message.textContent =
+          'Não foi possível confirmar seu acesso. Solicite um novo link.';
+      }
+
+      confirmLogin().catch((error) => {
+        console.error(error);
+        message.textContent =
+          'Ocorreu um erro. Tente solicitar um novo link.';
+      });
+    </script>
+  </main>
+</Layout>

@@ -1,0 +1,135 @@
+[hidden] {
+  display: none !important;
+}
+
+/* Dropdown (dialog modal). Desktop: ancorado via JS. Mobile: bottom sheet. */
+dialog.popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: min(280px, calc(100vw - 16px));
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+  box-shadow: 0 12px 32px #00000066;
+}
+
+dialog.popover::backdrop {
+  background: transparent;
+}
+
+dialog.popover[open] {
+  animation: popover-in 150ms ease-out;
+}
+
+@media (max-width: 767px) {
+  dialog.popover {
+    top: auto !important;
+    left: 0 !important;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-height: 80dvh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    box-shadow: none;
+  }
+
+  dialog.popover::backdrop {
+    background: #00000080;
+  }
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu-header {
+  padding: 8px 12px 12px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 6px;
+}
+
+.menu-header strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.menu-header span,
+.menu-section-title {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover:not(:disabled) {
+  background-color: var(--color-surface-hover);
+}
+
+.menu-item:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.menu-item img {
+  border-radius: 6px;
+}
+
+.menu-item--check::after {
+  content: '✓';
+  margin-left: auto;
+  color: var(--color-success-text);
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* Item com check à esquerda (lista de streamings marcados). */
+.check-item {
+  gap: 12px;
+}
+
+.check-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--color-border-strong);
+  font-size: 0.75rem;
+  color: var(--color-on-solid);
+}
+
+.check-item[aria-checked='true'] .check-box {
+  background-color: var(--color-success-solid);
+  border-color: var(--color-success-solid);
+}
+
+.check-item[aria-checked='true'] .check-box::before {
+  content: '✓';
+}

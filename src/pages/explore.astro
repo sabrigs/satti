@@ -1,0 +1,540 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import AddStatusButton from '../components/titles/AddStatusButton.astro';
+---
+
+<AppLayout>
+	<section class="explore" aria-labelledby="explore-title">
+		<header class="explore-header">
+			<h1 id="explore-title">Explore</h1>
+			<button type="button" class="explore-icon-button" id="search-toggle" aria-expanded="false" aria-controls="search-field" aria-label="Search">
+				<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+					<circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none" />
+					<path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+				</svg>
+			</button>
+		</header>
+
+		<div id="search-field" class="explore-search" hidden>
+			<input id="search-input" type="search" placeholder="Search titles or artists" aria-label="Search titles or artists" autocomplete="off" />
+		</div>
+
+		<div class="explore-tabs" role="tablist" aria-label="Explore categories">
+			<button type="button" role="tab" data-tab="trending" aria-selected="true">Trending</button>
+			<button type="button" role="tab" data-tab="theater" aria-selected="false">On Theater</button>
+		</div>
+
+		<div id="explore-status" class="explore-status" role="status" hidden>
+			<p id="explore-status-text"></p>
+			<button type="button" id="explore-status-action" hidden></button>
+		</div>
+
+		<div id="explore-grid" class="explore-grid" aria-live="polite">
+			<div id="explore-sentinel" class="explore-sentinel" aria-hidden="true"></div>
+		</div>
+	</section>
+
+	<!-- Modelo de card: clonado pelo script para cada título retornado. -->
+	<template id="card-template">
+		<article class="explore-card">
+			<a class="explore-card__poster" href="/">
+				<img alt="" loading="lazy" />
+			</a>
+			<h2 class="explore-card__title"></h2>
+			<AddStatusButton tmdbId={0} mediaType="movie" title="" posterPath={null} />
+		</article>
+	</template>
+
+	<script>
+		import { supabase } from '../lib/supabase.js';
+		import { initAddStatus } from '../lib/lists/add-status';
+		import { posterUrl } from '../lib/tmdb/images';
+		import { isBackNavigation, loadScreenState, saveScreenState } from '../lib/ui/navigation';
+
+		type Tab = 'trending' | 'theater';
+		type Item = { id: number; mediaType: 'movie' | 'tv'; title: string; posterPath: string | null };
+
+		const STATE_KEY = 'aurora:explore';
+
+		const grid = document.getElementById('explore-grid') as HTMLDivElement;
+		const cardTemplate = document.getElementById('card-template') as HTMLTemplateElement;
+		const sentinel = document.getElementById('explore-sentinel') as HTMLDivElement;
+		const statusBox = document.getElementById('explore-status') as HTMLDivElement;
+		const statusText = document.getElementById('explore-status-text') as HTMLParagraphElement;
+		const statusAction = document.getElementById('explore-status-action') as HTMLButtonElement;
+		const searchToggle = document.getElementById('search-toggle') as HTMLButtonElement;
+		const searchField = document.getElementById('search-field') as HTMLDivElement;
+		const searchInput = document.getElementById('search-input') as HTMLInputElement;
+		const tabButtons = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+
+		const state = {
+			tab: 'trending' as Tab,
+			query: '',
+			page: 0,
+			totalPages: 0,
+			items: [] as Item[],
+			loading: false,
+			requestId: 0,
+			// Falhou (ex.: localização negada): não repete sozinho até o usuário tentar de novo.
+			failed: false,
+		};
+
+		// Região do usuário para "On Theater", obtida uma vez por página.
+		let region: string | null = null;
+
+		type LocationReason = 'unsupported' | 'denied' | 'blocked' | 'unknown_region';
+
+		class LocationError extends Error {
+			constructor(readonly reason: LocationReason) {
+				super(reason);
+			}
+		}
+
+		const LOCATION_MESSAGES: Record<LocationReason, { text: string; action: string }> = {
+			denied: { text: 'Turn on location to see movies in theaters near you.', action: 'Allow location' },
+			blocked: {
+				text: 'Location is blocked for this site. Allow it in your browser settings, then try again.',
+				action: 'Try again',
+			},
+			unsupported: { text: 'This browser cannot share your location.', action: 'Try again' },
+			unknown_region: { text: 'We could not find your country from your location.', action: 'Try again' },
+		};
+
+		const requestRegion = async (): Promise<string> => {
+			if (!navigator.geolocation) throw new LocationError('unsupported');
+
+			// Se o navegador já bloqueou, o pedido não aparece de novo: avisa o usuário antes.
+			const permission = await navigator.permissions?.query({ name: 'geolocation' }).catch(() => undefined);
+			if (permission?.state === 'denied') throw new LocationError('blocked');
+
+			const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+				navigator.geolocation.getCurrentPosition(
+					resolve,
+					() => reject(new LocationError('denied')),
+					{ maximumAge: 10 * 60 * 1000, timeout: 10_000 },
+				);
+			});
+
+			const response = await fetch(
+				`/api/region?lat=${position.coords.latitude}&lng=${position.coords.longitude}`,
+			);
+			const data = (await response.json()) as { region: string | null };
+			if (!data.region) throw new LocationError('unknown_region');
+			return data.region;
+		};
+
+		const ensureRegion = async () => {
+			if (!region) {
+				region = await requestRegion();
+			}
+			return region;
+		};
+
+		const showStatus = (message: string | null, action?: { label: string; run: () => void }) => {
+			statusBox.hidden = !message;
+			statusText.textContent = message ?? '';
+			statusAction.hidden = !action;
+			if (action) {
+				statusAction.textContent = action.label;
+				statusAction.onclick = action.run;
+			}
+		};
+
+		const clearCards = () => {
+			grid.querySelectorAll('.explore-card, .explore-skeleton').forEach((node) => node.remove());
+		};
+
+		const addSkeletons = (count: number) => {
+			for (let index = 0; index < count; index++) {
+				const skeleton = document.createElement('div');
+				skeleton.className = 'explore-skeleton';
+				skeleton.setAttribute('aria-hidden', 'true');
+				grid.append(skeleton);
+			}
+		};
+
+		const clearSkeletons = () => {
+			grid.querySelectorAll('.explore-skeleton').forEach((node) => node.remove());
+		};
+
+		const makeCard = (item: Item) => {
+			const node = cardTemplate.content.firstElementChild!.cloneNode(true) as HTMLElement;
+			const link = node.querySelector<HTMLAnchorElement>('a')!;
+			link.href = `/title/${item.mediaType}/${item.id}`;
+			link.setAttribute('aria-label', item.title);
+
+			const img = node.querySelector<HTMLImageElement>('img')!;
+			const poster = posterUrl(item.posterPath);
+			if (poster) {
+				img.src = poster;
+			} else {
+				img.replaceWith(Object.assign(document.createElement('span'), { className: 'explore-card__silhouette' }));
+			}
+
+			node.querySelector<HTMLElement>('.explore-card__title')!.textContent = item.title;
+
+			const root = node.querySelector<HTMLElement>('[data-add-status]')!;
+			root.dataset.tmdbId = String(item.id);
+			root.dataset.mediaType = item.mediaType;
+			root.dataset.title = item.title;
+			root.dataset.posterPath = item.posterPath ?? '';
+
+			return { node, root };
+		};
+
+		const renderItems = (items: Item[]) => {
+			for (const item of items) {
+				const { node, root } = makeCard(item);
+				grid.insertBefore(node, sentinel);
+				void initAddStatus(root);
+			}
+		};
+
+		const loadNext = async () => {
+			if (state.loading || state.failed) return;
+			if (state.page > 0 && state.page >= state.totalPages) return;
+
+			const requestId = state.requestId;
+			state.loading = true;
+			showStatus(null);
+			addSkeletons(state.page === 0 ? 12 : 6);
+
+			try {
+				const params = new URLSearchParams({ page: String(state.page + 1) });
+				if (state.query) {
+					params.set('tab', 'search');
+					params.set('q', state.query);
+				} else {
+					params.set('tab', state.tab);
+					if (state.tab === 'theater') {
+						params.set('region', await ensureRegion());
+					}
+				}
+
+				const response = await fetch(`/api/explore?${params}`);
+				if (!response.ok) throw new Error(`explore ${response.status}`);
+				const data = (await response.json()) as { items: Item[]; totalPages: number };
+
+				// Resposta de uma aba ou busca anterior: descarta.
+				if (requestId !== state.requestId) return;
+
+				state.page += 1;
+				state.totalPages = data.totalPages;
+				state.items.push(...data.items);
+				renderItems(data.items);
+
+				if (state.page === 1 && data.items.length === 0) {
+					showStatus(
+						state.query ? `No results for "${state.query}".` : 'Nothing to show here right now.',
+					);
+				}
+			} catch (error) {
+				if (requestId !== state.requestId) return;
+				console.error(error);
+				state.failed = true;
+				if (error instanceof LocationError) {
+					const message = LOCATION_MESSAGES[error.reason];
+					showStatus(message.text, {
+						label: message.action,
+						run: () => {
+							region = null;
+							void reset();
+						},
+					});
+				} else {
+					showStatus('We could not load titles. Try again.', {
+						label: 'Try again',
+						run: () => {
+							state.failed = false;
+							void loadNext();
+						},
+					});
+				}
+			} finally {
+				if (requestId === state.requestId) {
+					state.loading = false;
+					clearSkeletons();
+					// Se o final da grid continuar visível (tela alta), carrega mais uma página.
+					requestAnimationFrame(() => {
+						if (sentinel.getBoundingClientRect().top < window.innerHeight + 400) {
+							void loadNext();
+						}
+					});
+				}
+			}
+		};
+
+		// Troca de aba ou busca: recomeça do início.
+		const reset = async () => {
+			state.requestId += 1;
+			state.page = 0;
+			state.totalPages = 0;
+			state.loading = false;
+			state.failed = false;
+			state.items = [];
+			clearCards();
+			await loadNext();
+		};
+
+		type ScreenState = {
+			tab: Tab;
+			query: string;
+			page: number;
+			totalPages: number;
+			items: Item[];
+			scrollY: number;
+		};
+
+		// Volta para a mesma aba e busca, com os títulos já carregados e a posição da rolagem.
+		const restore = (saved: ScreenState) => {
+			state.tab = saved.tab;
+			state.query = saved.query;
+			state.page = saved.page;
+			state.totalPages = saved.totalPages;
+			state.items = saved.items;
+
+			searchInput.value = saved.query;
+			if (saved.query) {
+				searchField.hidden = false;
+				searchToggle.setAttribute('aria-expanded', 'true');
+			}
+			tabButtons.forEach((button) =>
+				button.setAttribute('aria-selected', String(button.dataset.tab === saved.tab)),
+			);
+
+			renderItems(saved.items);
+			if (saved.items.length === 0) {
+				showStatus(saved.query ? `No results for "${saved.query}".` : 'Nothing to show here right now.');
+			}
+			requestAnimationFrame(() => window.scrollTo(0, saved.scrollY));
+		};
+
+		const selectTab = (tab: Tab) => {
+			state.tab = tab;
+			state.query = '';
+			searchInput.value = '';
+			tabButtons.forEach((button) => button.setAttribute('aria-selected', String(button.dataset.tab === tab)));
+			void reset();
+		};
+
+		tabButtons.forEach((button) => {
+			button.addEventListener('click', () => selectTab(button.dataset.tab as Tab));
+		});
+
+		searchToggle.addEventListener('click', () => {
+			const open = searchField.hidden;
+			searchField.hidden = !open;
+			searchToggle.setAttribute('aria-expanded', String(open));
+			if (open) searchInput.focus();
+		});
+
+		let searchTimer: number | undefined;
+		searchInput.addEventListener('input', () => {
+			window.clearTimeout(searchTimer);
+			searchTimer = window.setTimeout(() => {
+				const query = searchInput.value.trim();
+				if (query.length === 1) return; // espera pelo menos 2 caracteres
+				if (query === state.query) return;
+				state.query = query;
+				void reset();
+			}, 350);
+		});
+
+		// Scroll infinito: carrega a próxima página quando o final da grid aparece.
+		const observer = new IntersectionObserver((entries) => {
+			if (entries.some((entry) => entry.isIntersecting)) {
+				void loadNext();
+			}
+		}, { rootMargin: '400px 0px' });
+		observer.observe(sentinel);
+
+		// Ao sair da tela (ex.: abrir um título), guarda aba, busca, itens e posição.
+		window.addEventListener('pagehide', () => {
+			saveScreenState(STATE_KEY, {
+				tab: state.tab,
+				query: state.query,
+				page: state.page,
+				totalPages: state.totalPages,
+				items: state.items,
+				scrollY: window.scrollY,
+			});
+		});
+
+		// Mesma proteção das outras telas: sem sessão, volta para o login.
+		const { data: sessionData } = await supabase.auth.getSession();
+		if (!sessionData.session) {
+			window.location.replace('/login');
+		} else {
+			const saved = isBackNavigation() ? loadScreenState<ScreenState>(STATE_KEY) : null;
+			if (saved) {
+				restore(saved);
+			} else {
+				void reset();
+			}
+		}
+	</script>
+</AppLayout>
+
+<style is:global>
+	.explore {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.explore-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.explore-header h1 {
+		margin: 0;
+		font-size: 2rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.explore-icon-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border-radius: 999px;
+		border: 1px solid var(--color-border-strong);
+		background-color: var(--color-surface-raised);
+		color: var(--color-text);
+		cursor: pointer;
+	}
+
+	.explore-search input {
+		width: 100%;
+		height: 44px;
+		padding-inline: 16px;
+		border: 0;
+		border-radius: 10px;
+		background-color: var(--color-surface-raised);
+		color: var(--color-text);
+		font-size: 1rem;
+	}
+
+	.explore-tabs {
+		display: flex;
+		gap: 8px;
+		overflow-x: auto;
+	}
+
+	.explore-tabs [role='tab'] {
+		padding: 8px 14px;
+		border-radius: 999px;
+		border: 1px solid var(--color-border);
+		background: none;
+		color: var(--color-text-muted);
+		font: inherit;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+
+	.explore-tabs [role='tab'][aria-selected='true'] {
+		background-color: var(--color-solid);
+		color: var(--color-on-solid);
+		border-color: var(--color-solid);
+	}
+
+	.explore-status {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 12px;
+		padding: 24px 0;
+		text-align: center;
+		color: var(--color-text-muted);
+	}
+
+	.explore-status button {
+		padding: 8px 14px;
+		border-radius: 999px;
+		border: 1px solid var(--color-border-strong);
+		background-color: var(--color-surface-raised);
+		color: var(--color-text);
+		cursor: pointer;
+	}
+
+	.explore-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+		gap: 20px 16px;
+	}
+
+	.explore-card {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.explore-card__poster {
+		display: block;
+		aspect-ratio: 2 / 3;
+		border-radius: 12px;
+		overflow: hidden;
+		background-color: var(--color-surface-raised);
+		border: 1px solid var(--color-border);
+	}
+
+	.explore-card__poster img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.explore-card__silhouette {
+		display: block;
+		width: 100%;
+		height: 100%;
+		background-image: linear-gradient(180deg, var(--color-surface-hover), var(--color-surface-raised));
+	}
+
+	.explore-card__title {
+		margin: 0;
+		font-size: 0.9375rem;
+		font-weight: 500;
+		color: var(--color-text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.explore-card .add-status {
+		align-self: flex-start;
+	}
+
+	.explore-skeleton {
+		aspect-ratio: 2 / 3;
+		border-radius: 12px;
+		background: linear-gradient(90deg, var(--color-surface) 25%, var(--color-surface-hover) 50%, var(--color-surface) 75%);
+		background-size: 200% 100%;
+		animation: explore-shimmer 1.2s linear infinite;
+	}
+
+	.explore-sentinel {
+		grid-column: 1 / -1;
+		height: 1px;
+	}
+
+	@keyframes explore-shimmer {
+		from {
+			background-position: 200% 0;
+		}
+		to {
+			background-position: -200% 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.explore-skeleton {
+			animation: none;
+		}
+	}
+</style>

@@ -1,0 +1,63 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends HTMLAttributes<'button'> {
+  label?: string;
+  variant?: 'primary' | 'secondary';
+  size?: 'small' | 'medium' | 'large';
+}
+
+const {
+  label,
+  variant = 'primary',
+  size = 'medium',
+  class: className,
+  ...attrs
+} = Astro.props;
+---
+
+<button
+  {...attrs}
+  class:list={['button', `button--${variant}`, `button--${size}`, className]}
+>
+  <slot>{label}</slot>
+</button>
+
+<style>
+  .button {
+    cursor: pointer;
+    border: 0;
+    border-radius: 8px;
+    font-size: 1rem;
+  }
+
+  .button--primary {
+    background: var(--color-solid);
+    color: var(--color-on-solid);
+  }
+
+  .button--primary:hover {
+    background: var(--color-solid-hover);
+  }
+
+  .button--secondary {
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+  }
+
+  .button--secondary:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .button--small {
+    padding: 8px 12px;
+  }
+
+  .button--medium {
+    padding: 12px 16px;
+  }
+
+  .button--large {
+    padding: 16px 24px;
+  }
+</style>
