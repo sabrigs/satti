@@ -1,0 +1,218 @@
+---
+import { getTopBrazilProviders } from '../../lib/streaming/availability';
+import { logoUrl } from '../../lib/tmdb/images';
+
+// Os mesmos 5 streamings do onboarding, para adicionar pelo menu.
+const providers = await getTopBrazilProviders('movie', 5).catch(() => []);
+const providersForClient = providers.map((provider) => ({
+	id: provider.id,
+	name: provider.name,
+	logoPath: provider.logoPath,
+	logoUrl: logoUrl(provider.logoPath),
+}));
+---
+
+<button type="button" class="avatar" id="avatar-button" aria-haspopup="dialog" aria-label="Open account menu">
+	<span id="avatar-initials" aria-hidden="true">?</span>
+</button>
+
+<dialog class="popover" id="avatar-menu" aria-label="Account">
+	<div id="avatar-main" class="menu">
+		<div class="menu-header">
+			<strong id="avatar-name"></strong>
+			<span id="avatar-member-since"></span>
+		</div>
+		<button type="button" class="menu-item" id="open-streamings">My streamings</button>
+		<button type="button" class="menu-item" id="export-data" hidden>Export data</button>
+		<button type="button" class="menu-item" id="sign-out">Sign out</button>
+	</div>
+
+	<div id="avatar-streamings" class="menu" hidden>
+		<button type="button" class="menu-item" id="back-to-menu">← Back</button>
+		<p class="menu-section-title">My streamings</p>
+		<div id="streaming-checklist" class="menu" role="group" aria-label="My streamings"></div>
+	</div>
+</dialog>
+
+<script id="avatar-providers" type="application/json" set:html={JSON.stringify(providersForClient)} />
+
+<style>
+	.avatar {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border-radius: 999px;
+		border: 1px solid var(--color-border-strong);
+		background-color: var(--color-surface-raised);
+		color: var(--color-text);
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.avatar:hover {
+		background-color: var(--color-surface-hover);
+	}
+</style>
+
+<script>
+	import { supabase } from '../../lib/supabase.js';
+	import {
+		addStreaming,
+		getUserStreamings,
+		removeStreaming,
+		type StreamingRow,
+	} from '../../lib/lists/store';
+	import { enableLightDismiss, openPopover } from '../../lib/ui/popover';
+	import { downloadExport, hasExportableData } from '../../lib/lists/export';
+	import { brandName } from '../../lib/streaming/canonical';
+
+	type Provider = { id: number; name: string; logoPath: string | null; logoUrl: string | null };
+
+	const avatarButton = document.getElementById('avatar-button') as HTMLButtonElement;
+	const menu = document.getElementById('avatar-menu') as HTMLDialogElement;
+	const mainPanel = document.getElementById('avatar-main') as HTMLDivElement;
+	const streamingsPanel = document.getElementById('avatar-streamings') as HTMLDivElement;
+	const initials = document.getElementById('avatar-initials') as HTMLSpanElement;
+	const nameEl = document.getElementById('avatar-name') as HTMLElement;
+	const memberSince = document.getElementById('avatar-member-since') as HTMLSpanElement;
+	const checklist = document.getElementById('streaming-checklist') as HTMLDivElement;
+	const providers: Provider[] = JSON.parse(
+		document.getElementById('avatar-providers')?.textContent ?? '[]',
+	);
+
+	type ChecklistRow = { brand: string; logo: string | null; owned: boolean; provider: Provider | null; stored: StreamingRow | null };
+
+	// Lista única: os streamings marcados ficam em cima, os desmarcados embaixo.
+	// Clicar alterna a seleção.
+	const renderStreamings = (owned: StreamingRow[]) => {
+		const storedByBrand = new Map(owned.map((row) => [brandName(row.providerName), row]));
+		const rows: ChecklistRow[] = providers.map((provider) => ({
+			brand: provider.name,
+			logo: provider.logoUrl,
+			owned: storedByBrand.has(provider.name),
+			provider,
+			stored: storedByBrand.get(provider.name) ?? null,
+		}));
+
+		// Streamings salvos que não estão entre os 5 principais continuam visíveis e marcados.
+		for (const [brand, stored] of storedByBrand) {
+			if (!providers.some((provider) => provider.name === brand)) {
+				rows.push({ brand, logo: null, owned: true, provider: null, stored });
+			}
+		}
+
+		rows.sort((a, b) => Number(b.owned) - Number(a.owned));
+		checklist.replaceChildren(...rows.map((row) => checkItem(row)));
+	};
+
+	const checkItem = (row: ChecklistRow) => {
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.className = 'menu-item check-item';
+		button.setAttribute('role', 'menuitemcheckbox');
+		button.setAttribute('aria-checked', String(row.owned));
+
+		const box = document.createElement('span');
+		box.className = 'check-box';
+		box.setAttribute('aria-hidden', 'true');
+		button.append(box);
+
+		if (row.logo) {
+			const img = document.createElement('img');
+			img.src = row.logo;
+			img.alt = '';
+			img.width = 24;
+			img.height = 24;
+			button.append(img);
+		}
+		button.append(row.brand);
+
+		button.addEventListener('click', async () => {
+			button.disabled = true;
+			try {
+				if (row.stored) {
+					await removeStreaming(row.stored.providerId);
+				} else if (row.provider) {
+					await addStreaming(row.provider);
+				}
+			} catch (error) {
+				console.error(error);
+			}
+			renderStreamings(await getUserStreamings());
+		});
+
+		return button;
+	};
+
+	const showPanel = (panel: 'main' | 'streamings') => {
+		mainPanel.hidden = panel !== 'main';
+		streamingsPanel.hidden = panel !== 'streamings';
+	};
+
+	const loadProfile = async () => {
+		const { data: sessionData } = await supabase.auth.getSession();
+		const session = sessionData.session;
+		if (!session) return;
+
+		const { data: profile } = await supabase
+			.from('profiles')
+			.select('display_name, created_at')
+			.eq('user_id', session.user.id)
+			.single();
+
+		const name = profile?.display_name || session.user.email || 'You';
+		nameEl.textContent = name;
+		initials.textContent = name.charAt(0).toUpperCase();
+		if (profile?.created_at) {
+			const date = new Date(profile.created_at).toLocaleDateString('en-US', {
+				month: 'short',
+				day: 'numeric',
+				year: 'numeric',
+			});
+			memberSince.textContent = `Member since ${date}`;
+		}
+	};
+
+	avatarButton.addEventListener('click', () => {
+		showPanel('main');
+		openPopover(menu, avatarButton);
+		// "Export data" só aparece quando há dados para exportar.
+		hasExportableData()
+			.then((hasData) => {
+				document.getElementById('export-data')!.hidden = !hasData;
+			})
+			.catch((error) => console.error(error));
+	});
+
+	enableLightDismiss(menu);
+
+	document.getElementById('open-streamings')?.addEventListener('click', async () => {
+		showPanel('streamings');
+		renderStreamings(await getUserStreamings());
+	});
+
+	document.getElementById('back-to-menu')?.addEventListener('click', () => showPanel('main'));
+
+	document.getElementById('export-data')?.addEventListener('click', async (event) => {
+		const button = event.currentTarget as HTMLButtonElement;
+		button.disabled = true;
+		try {
+			await downloadExport();
+			menu.close();
+		} catch (error) {
+			console.error(error);
+			window.alert('We could not export your data. Try again.');
+		} finally {
+			button.disabled = false;
+		}
+	});
+
+	document.getElementById('sign-out')?.addEventListener('click', async () => {
+		await supabase.auth.signOut();
+		window.location.replace('/login');
+	});
+
+	loadProfile().catch((error) => console.error(error));
+</script>

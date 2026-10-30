@@ -1,0 +1,60 @@
+---
+interface Props {
+  name: string;
+  path: string;
+  description?: string;
+}
+
+const { name, path, description } = Astro.props;
+---
+
+<section class="component-card" aria-labelledby={`card-${name}`}>
+  <header>
+    <h2 id={`card-${name}`}>{name}</h2>
+    <code>{path}</code>
+    {description && <p>{description}</p>}
+  </header>
+  <div class="component-card__preview">
+    <slot />
+  </div>
+</section>
+
+<style>
+  .component-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px;
+    border-radius: 16px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  code {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: var(--color-text-muted);
+  }
+
+  .component-card__preview {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    border-radius: 12px;
+    background-color: var(--color-bg);
+    border: 1px dashed var(--color-border-strong);
+  }
+</style>

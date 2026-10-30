@@ -1,0 +1,29 @@
+---
+import InputField from '../ui/InputField.astro';
+
+interface Props {
+  label: string;
+  placeholder: string;
+}
+
+const { label, placeholder } = Astro.props;
+const fieldName = label.trim().toLowerCase().replace(/\s+/g, '-');
+const inputId = `input-${fieldName}`;
+---
+
+<div class="form-field">
+  <label for={inputId}>{label}</label>
+  <InputField id={inputId} name={fieldName} type="text" placeholder={placeholder} />
+</div>
+
+<style>
+  .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  label {
+    color: var(--color-text-muted);
+  }
+</style>

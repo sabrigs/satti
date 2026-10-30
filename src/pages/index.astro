@@ -1,11 +1,101 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
-
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+import AppLayout from '../layouts/AppLayout.astro';
+import ListCard from '../components/lists/ListCard.astro';
 ---
 
-<Layout>
-	<Welcome />
-</Layout>
+<AppLayout>
+	<section class="home">
+		<h1>My lists</h1>
+		<div class="cards">
+			<ListCard kind="to_watch" name="To watch" />
+			<ListCard kind="favorites" name="Favorites" />
+			<ListCard kind="watched" name="Watched" />
+		</div>
+	</section>
+
+	<script>
+		import { supabase } from '../lib/supabase.js';
+		import { getListSummaries, LISTS_CHANGED_EVENT, type ListSummary } from '../lib/lists/store';
+		import { posterUrl } from '../lib/tmdb/images';
+
+		// Proteção da rota: sem sessão vai para o login; sem onboarding vai para o onboarding.
+		const redirectIfNeeded = async () => {
+			const { data: sessionData } = await supabase.auth.getSession();
+			const session = sessionData.session;
+			if (!session) {
+				window.location.replace('/login');
+				return false;
+			}
+
+			const { data: profile } = await supabase
+				.from('profiles')
+				.select('onboarding_completed')
+				.eq('user_id', session.user.id)
+				.single();
+			if (!profile?.onboarding_completed) {
+				window.location.replace('/onboarding');
+				return false;
+			}
+			return true;
+		};
+
+		// Preenche um card: contador e prévia em leque (centro = mais recente).
+		const renderCard = (summary: ListSummary) => {
+			const card = document.querySelector<HTMLElement>(`[data-list-kind="${summary.kind}"]`);
+			if (!card) return;
+
+			card.querySelector<HTMLElement>('[data-count]')!.textContent = String(summary.count);
+
+			const slots = card.querySelectorAll<HTMLElement>('[data-poster]');
+			// Ordem visual: esquerda, centro (mais recente), direita.
+			const order = [1, 0, 2];
+			order.forEach((slotIndex, position) => {
+				const slot = slots[slotIndex];
+				const item = summary.recent[position];
+				const poster = posterUrl(item?.posterPath ?? null);
+
+				if (poster) {
+					slot.classList.remove('poster--silhouette');
+					slot.style.backgroundImage = `url("${poster}")`;
+					slot.style.backgroundSize = 'cover';
+				}
+			});
+		};
+
+		const refresh = async () => {
+			try {
+				const summaries = await getListSummaries();
+				summaries.forEach(renderCard);
+			} catch (error) {
+				console.error(error);
+			}
+		};
+
+		redirectIfNeeded().then((ok) => {
+			if (ok) refresh();
+		});
+
+		window.addEventListener(LISTS_CHANGED_EVENT, refresh);
+	</script>
+</AppLayout>
+
+<style>
+	.home {
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+	}
+
+	h1 {
+		margin: 0;
+		font-size: 2rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+		gap: 16px;
+	}
+</style>

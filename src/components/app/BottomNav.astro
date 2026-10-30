@@ -1,0 +1,42 @@
+---
+// Toolbar fixa no mobile, com "My lists" e "Explore" como tabs.
+const path = Astro.url.pathname;
+const current = (href: string) => (path === href ? 'page' : undefined);
+---
+
+<nav class="bottom-nav" aria-label="Main">
+	<a href="/" aria-current={current('/')}>My lists</a>
+	<a href="/explore" aria-current={current('/explore')}>Explore</a>
+</nav>
+
+<style>
+	.bottom-nav {
+		display: none;
+	}
+
+	@media (max-width: 767px) {
+		.bottom-nav {
+			position: fixed;
+			inset: auto 0 0 0;
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+			border-top: 1px solid var(--color-border);
+			background-color: var(--color-surface);
+			z-index: 10;
+		}
+
+		.bottom-nav a {
+			padding: 10px;
+			border-radius: 10px;
+			text-align: center;
+			color: var(--color-text-muted);
+			text-decoration: none;
+		}
+
+		.bottom-nav a[aria-current='page'] {
+			color: var(--color-text);
+			background-color: var(--color-surface-hover);
+		}
+	}
+</style>

@@ -1,0 +1,29 @@
+---
+import { supabase } from "../lib/supabase.js";
+
+interface Instrument {
+  name: string;
+}
+
+const { data: instruments, error } = await supabase
+  .from("instruments")
+  .select("name")
+  .returns<Instrument[]>();
+---
+
+<html>
+  <head>
+    <title>Instruments</title>
+  </head>
+  <body>
+    {error ? (
+      <p>Error loading instruments: {error.message}</p>
+    ) : (
+      <ul>
+        {instruments?.map((instrument) => (
+          <li>{instrument.name}</li>
+        ))}
+      </ul>
+    )}
+  </body>
+</html>

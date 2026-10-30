@@ -1,0 +1,215 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Button from '../components/ui/Button.astro';
+import Title from '../components/ui/Title.astro';
+import { getRandomBackdrop } from '../lib/tmdb/titles';
+
+// Backdrop aleatório da TMDB; sem token ou com erro, usa a imagem estática.
+const FALLBACK_BACKDROP = '/background.webp';
+const backdropPath = await getRandomBackdrop().catch(() => null);
+const backdrop = backdropPath
+	? `https://image.tmdb.org/t/p/w1280${backdropPath}`
+	: FALLBACK_BACKDROP;
+---
+
+<Layout>
+	<main>
+		<div id="background" style={`--backdrop: url("${backdrop}");`}>
+			<section id="login">
+				<div id="container">
+					<Title id="title">Welcome</Title>
+					<p id="caption">Take the movies and TV shows you've watched to whatever you go.</p>
+
+					<form id="login-form" novalidate>
+						<div class="input">
+							<input id="input-email" type="email" autocomplete="email" name="email" placeholder="Email" required aria-label="Insert your email" aria-describedby="email-error">
+							<p id="email-error" class="error" role="alert" hidden></p>
+						</div>
+						<div class="action-bar">
+							<Button id="submit-button" type="submit" label="Continue with email"></Button>
+						</div>
+					</form>
+
+					<div id="sent" hidden>
+						<p>We sent a magic link to <strong id="sent-email"></strong>. Open it on this device to sign in.</p>
+						<Button id="change-email" variant="secondary" label="Use a different email"></Button>
+					</div>
+				</div>
+			</section>
+		</div>
+	</main>
+
+	<script>
+		import { supabase } from '../lib/supabase.js';
+
+		const form = document.getElementById('login-form') as HTMLFormElement;
+		const emailInput = document.getElementById('input-email') as HTMLInputElement;
+		const errorText = document.getElementById('email-error') as HTMLParagraphElement;
+		const submitButton = document.getElementById('submit-button') as HTMLButtonElement;
+		const sent = document.getElementById('sent') as HTMLDivElement;
+		const sentEmail = document.getElementById('sent-email') as HTMLElement;
+		const changeEmail = document.getElementById('change-email') as HTMLButtonElement;
+
+		const showError = (message: string) => {
+			errorText.textContent = message;
+			errorText.hidden = false;
+			emailInput.setAttribute('aria-invalid', 'true');
+		};
+
+		const clearError = () => {
+			errorText.textContent = '';
+			errorText.hidden = true;
+			emailInput.removeAttribute('aria-invalid');
+		};
+
+		const setSending = (sending: boolean) => {
+			submitButton.disabled = sending;
+			submitButton.textContent = sending ? 'Sending...' : 'Continue with email';
+		};
+
+		form.addEventListener('submit', async (event) => {
+			event.preventDefault();
+			clearError();
+
+			const email = emailInput.value.trim();
+			if (!emailInput.checkValidity() || !email) {
+				showError('Enter a valid email address.');
+				return;
+			}
+
+			setSending(true);
+			const { error } = await supabase.auth.signInWithOtp({
+				email,
+				options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+			});
+			setSending(false);
+
+			if (error) {
+				showError('We could not send the link. Try again in a moment.');
+				console.error(error);
+				return;
+			}
+
+			sentEmail.textContent = email;
+			form.hidden = true;
+			sent.hidden = false;
+		});
+
+		changeEmail.addEventListener('click', () => {
+			sent.hidden = true;
+			form.hidden = false;
+			emailInput.focus();
+		});
+	</script>
+
+	<style>
+		* {
+			box-sizing: border-box;
+		}
+
+		main {
+			height: 100dvh;
+			padding: 16px;
+		}
+
+		[hidden] {
+			display: none !important;
+		}
+
+		.error {
+			margin: 0;
+			font-size: 0.875rem;
+			color: var(--color-danger-text);
+		}
+
+		:focus-visible{
+			outline: 3px dashed black;
+			outline-offset: 2px;
+		}
+
+		#background {
+			display: flex;
+			flex-flow: row nowrap;
+			justify-content: center;
+			height: 100%;
+			border-radius: 16px;
+			padding: 16px;
+			background-color: var(--color-surface);
+		}
+
+		#login {
+			width: 100vw;
+			padding: 16px;
+			border-radius: 16px;
+			display: flex;
+			flex-flow: column nowrap;
+			justify-content: center;
+			align-items: center;
+			background-color: var(--color-surface);
+			transition: width 0.3s ease;
+		}
+
+		#container {
+			max-width: 300px;
+			width: 100%;
+			display: flex;
+			flex-flow: column nowrap;
+			justify-content: center;
+		}
+
+		#login p {
+			line-height: 120%;
+			margin-bottom: 24px;
+			color: grey;
+			font-size: 1rem;
+			text-align: center;
+			font-family: Arial, Helvetica, sans-serif;
+		}
+
+		#login-form {
+			display: flex;
+			flex-direction: column;
+			align-items: stretch;
+			gap: 16px;
+		}
+		
+		#login-form input {
+			height: 48px;
+			border-radius: 8px;
+			border: none;
+			background-color: var(--color-surface-raised);
+			color: var(--color-text);
+			box-shadow: 0px 2px 5px 0px #0000001f;
+			padding-left: 16px;
+			font-size: 1rem;
+		}
+
+		.input {
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+		}
+
+		.action-bar {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+
+		@media (min-width: 900px) {
+		
+			#background {
+				justify-content: flex-end;
+				
+				background-image: var(--backdrop);
+				background-size: cover;
+				background-repeat: no-repeat;
+				background-position: center center;
+			}
+
+			#login {
+			width: 50vw;
+			}
+		}
+	</style>
+</Layout>
