@@ -111,10 +111,17 @@ dialog.popover[open] {
   border-radius: 6px;
 }
 
-.menu-item--check::after {
+.menu-item--option::before {
   content: '✓';
-  margin-left: auto;
-  color: var(--color-success-text);
+  flex: 0 0 16px;
+  text-align: center;
+  color: var(--color-text);
+  visibility: hidden;
+}
+
+/* Opção selecionada: check à esquerda, em branco. */
+.menu-item--selected::before {
+  visibility: visible;
 }
 
 @keyframes popover-in {

@@ -46,11 +46,11 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 
 	<!-- Modelo de card: clonado pelo script para cada título retornado. -->
 	<template id="card-template">
-		<article class="explore-card">
-			<a class="explore-card__cover" href="/"></a>
-			<div class="explore-card__info">
-				<h2 class="explore-card__title"></h2>
-				<p class="explore-card__meta"></p>
+		<article class="title-card">
+			<a class="title-card__cover" href="/"></a>
+			<div class="title-card__info">
+				<h2 class="title-card__title"></h2>
+				<p class="title-card__meta"></p>
 			</div>
 			<AddStatusButton tmdbId={0} mediaType="movie" title="" posterPath={null} />
 		</article>
@@ -166,7 +166,7 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 		};
 
 		const clearCards = () => {
-			grid.querySelectorAll('.explore-card, .explore-skeleton').forEach((node) => node.remove());
+			grid.querySelectorAll('.title-card, .explore-skeleton').forEach((node) => node.remove());
 		};
 
 		const addSkeletons = (count: number) => {
@@ -184,7 +184,7 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 
 		const makeCard = (item: Item) => {
 			const node = cardTemplate.content.firstElementChild!.cloneNode(true) as HTMLElement;
-			const cover = node.querySelector<HTMLAnchorElement>('.explore-card__cover')!;
+			const cover = node.querySelector<HTMLAnchorElement>('.title-card__cover')!;
 			cover.href = `/title/${item.mediaType}/${item.id}`;
 			cover.setAttribute('aria-label', item.title);
 
@@ -194,12 +194,12 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 				node.style.backgroundImage = `url("${backdrop}")`;
 			}
 
-			node.querySelector<HTMLElement>('.explore-card__title')!.textContent = item.title;
+			node.querySelector<HTMLElement>('.title-card__title')!.textContent = item.title;
 			const meta = [
 				item.mediaType === 'movie' ? 'Movie' : 'Series',
 				item.voteAverage > 0 ? `★ ${item.voteAverage.toFixed(1)}` : null,
 			].filter(Boolean);
-			node.querySelector<HTMLElement>('.explore-card__meta')!.textContent = meta.join(' · ');
+			node.querySelector<HTMLElement>('.title-card__meta')!.textContent = meta.join(' · ');
 
 			const root = node.querySelector<HTMLElement>('[data-add-status]')!;
 			root.dataset.tmdbId = String(item.id);
@@ -583,10 +583,12 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 	}
 
 	/* Cards: 3 colunas no desktop, 2 no tablet e 1 no mobile, com 16px de gap. */
+	/* 3 colunas ocupando a largura total (cards crescem mantendo 16:9); 2 no tablet e 1 no mobile. */
 	.explore-grid {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 16px;
+		width: 100%;
 	}
 
 	@media (max-width: 1023px) {
@@ -599,66 +601,6 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 		.explore-grid {
 			grid-template-columns: minmax(0, 1fr);
 		}
-	}
-
-	.explore-card {
-		position: relative;
-		isolation: isolate;
-		aspect-ratio: 16 / 9;
-		border-radius: 16px;
-		clip-path: inset(0 round 16px);
-		overflow: hidden;
-		background-color: var(--color-surface-raised);
-		background-size: cover;
-		background-position: center;
-	}
-
-	.explore-card::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		border-radius: inherit;
-		background: linear-gradient(180deg, #00000000 35%, #000000cc 100%);
-		pointer-events: none;
-	}
-
-	.explore-card__cover {
-		position: absolute;
-		inset: 0;
-		z-index: 1;
-		border-radius: inherit;
-	}
-
-	.explore-card__info {
-		position: absolute;
-		left: 16px;
-		right: 16px;
-		bottom: 16px;
-		z-index: 2;
-		pointer-events: none;
-		color: #fff;
-	}
-
-	.explore-card__title {
-		margin: 0;
-		font-size: 1.25rem;
-		font-weight: 600;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.explore-card__meta {
-		margin: 4px 0 0;
-		font-size: 0.9375rem;
-		color: #ffffffcc;
-	}
-
-	.explore-card .add-status {
-		position: absolute;
-		top: 12px;
-		right: 12px;
-		z-index: 3;
 	}
 
 	.explore-skeleton {

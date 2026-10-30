@@ -3,6 +3,7 @@ import Layout from './Layout.astro';
 import AppHeader from '../components/app/AppHeader.astro';
 import BottomNav from '../components/app/BottomNav.astro';
 import '../styles/popover.css';
+import '../styles/title-card.css';
 
 interface Props {
 	// Ocupa toda a largura da tela (com a margem de 16px), em vez de limitar a 1100px.
@@ -10,16 +11,20 @@ interface Props {
 }
 
 const { fullWidth = false } = Astro.props;
+
+// A toolbar aparece só nas telas de primeiro nível (My lists e Explore).
+const pathname = Astro.url.pathname;
+const showBottomNav = pathname === '/' || pathname === '/explore';
 ---
 
 <Layout>
 	<div transition:persist="app-header">
 		<AppHeader />
 	</div>
-	<main class:list={['app-main', { 'app-main--full': fullWidth }]}>
+	<main class:list={['app-main', { 'app-main--full': fullWidth, 'app-main--no-nav': !showBottomNav }]}>
 		<slot />
 	</main>
-	<BottomNav />
+	{showBottomNav && <BottomNav />}
 </Layout>
 
 <style>
@@ -31,6 +36,11 @@ const { fullWidth = false } = Astro.props;
 
 	.app-main--full {
 		max-width: none;
+	}
+
+	/* Sem toolbar, a página não reserva espaço para ela no rodapé. */
+	.app-main--no-nav {
+		padding-bottom: 24px;
 	}
 
 	@media (min-width: 768px) {

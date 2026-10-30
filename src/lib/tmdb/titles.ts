@@ -137,7 +137,7 @@ export interface TitleDetails extends TitleSummary {
   genres: string[];
   runtime: number | null;
   imdbId: string | null;
-  cast: { name: string; character: string }[];
+  cast: { name: string; character: string; profilePath: string | null }[];
 }
 
 interface RawDetails extends RawTitle {
@@ -146,7 +146,7 @@ interface RawDetails extends RawTitle {
   episode_run_time?: number[];
   imdb_id?: string | null;
   external_ids?: { imdb_id: string | null };
-  credits?: { cast: { name: string; character: string }[] };
+  credits?: { cast: { name: string; character: string; profile_path: string | null }[] };
 }
 
 // Detalhes do título (Lista de metadados, sinopse e elenco).
@@ -163,6 +163,7 @@ export async function getTitleDetails(mediaType: MediaType, id: number): Promise
     cast: (raw.credits?.cast ?? []).slice(0, 10).map((member) => ({
       name: member.name,
       character: member.character,
+      profilePath: member.profile_path,
     })),
   };
 }

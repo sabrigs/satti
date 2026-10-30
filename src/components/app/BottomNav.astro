@@ -62,3 +62,17 @@ const current = (href: string) => (path === href ? 'page' : undefined);
 		}
 	}
 </style>
+
+<script>
+	// A toolbar só existe nas telas de primeiro nível. Se ela ficar para trás numa navegação
+	// sem recarregar a página, remove aqui.
+	const removeOutsideRootScreens = () => {
+		const path = window.location.pathname;
+		if (path !== '/' && path !== '/explore') {
+			document.querySelectorAll('.bottom-nav').forEach((nav) => nav.remove());
+		}
+	};
+
+	removeOutsideRootScreens();
+	document.addEventListener('astro:page-load', removeOutsideRootScreens);
+</script>
