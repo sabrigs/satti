@@ -38,7 +38,7 @@ const {
     color: var(--color-on-solid);
   }
 
-  .button--primary:hover {
+  .button--primary:hover:not(:disabled) {
     background-color: var(--color-solid-hover);
   }
 
@@ -47,8 +47,13 @@ const {
     color: var(--color-text);
   }
 
-  .button--secondary:hover {
+  .button--secondary:hover:not(:disabled) {
     background-color: var(--color-surface-hover);
+  }
+
+  .button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .button--small {

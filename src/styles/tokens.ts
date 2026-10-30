@@ -112,9 +112,15 @@ const toCss = (selector: string, tokens: Record<string, string>) =>
     .map(([name, value]) => `  ${name}: ${value};`)
     .join('\n')}\n}`;
 
+// Fontes: Source Serif 4 para títulos e Inter para o corpo (Google Fonts, carregadas no Layout).
+const fontTokens = {
+  '--font-serif': "'Source Serif 4', Georgia, serif",
+  '--font-sans': "'Inter', system-ui, -apple-system, sans-serif",
+};
+
 // CSS completo dos tokens: dark por padrão, light via [data-theme="light"].
 export const themeCss = (success: SuccessPaletteName = 'green') =>
   [
-    toCss(':root', semanticTokens('dark', success)),
+    toCss(':root', { ...fontTokens, ...semanticTokens('dark', success) }),
     toCss(':root[data-theme="light"]', semanticTokens('light', success)),
   ].join('\n\n');

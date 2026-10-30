@@ -1,7 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Button from '../components/ui/Button.astro';
-import Title from '../components/ui/Title.astro';
 import { getRandomBackdrop } from '../lib/tmdb/titles';
 
 // Backdrop aleatório da TMDB; sem token ou com erro, usa a imagem estática.
@@ -16,28 +15,30 @@ const backdrop = backdropPath
 	<main>
 		<div id="background" style={`--backdrop: url("${backdrop}");`}>
 			<section id="login">
-				<div id="container">
-					<Title id="title">Welcome</Title>
-					<p id="caption">Take the movies and TV shows you've watched to whatever you go.</p>
-
+				<div id="panel">
 					<form id="login-form" novalidate>
-						<div class="input">
-							<input id="input-email" type="email" autocomplete="email" name="email" placeholder="Email" required aria-label="Insert your email" aria-describedby="email-error">
+						<h1 class="brand">Aurora</h1>
+						<p class="caption">Take your movies and TV shows to whatever you go.</p>
+
+						<div class="field">
+							<input id="input-email" type="email" autocomplete="email" name="email" placeholder="Email" required aria-label="Email" aria-describedby="email-error" />
 							<p id="email-error" class="error" role="alert" hidden></p>
 						</div>
-						<div class="action-bar">
-							<Button id="submit-button" type="submit" label="Continue with email"></Button>
-						</div>
+
+						<Button id="submit-button" type="submit" label="Continue with email" class="pill" />
 					</form>
 
-					<div id="sent" hidden>
-						<p>We sent a magic link to <strong id="sent-email"></strong>. Open it on this device to sign in.</p>
-						<Button id="change-email" variant="secondary" label="Use a different email"></Button>
+					<div id="sent" class="sent" hidden>
+						<h1 class="sent-title">Check your email</h1>
+						<p class="sent-text">To continue, click in the link sent to</p>
+						<p class="sent-email"><strong id="sent-email"></strong></p>
+						<p class="sent-retry">Not finding the email? <button type="button" id="change-email" class="link">Try again</button></p>
 					</div>
 				</div>
 			</section>
 		</div>
 	</main>
+
 
 	<script>
 		import { supabase } from '../lib/supabase.js';
@@ -103,112 +104,171 @@ const backdrop = backdropPath
 	</script>
 
 	<style>
-		* {
-			box-sizing: border-box;
+		/* A tela cabe na altura da janela: sem scroll. */
+		:global(html),
+		:global(body) {
+			height: 100%;
+			overflow: hidden;
 		}
 
 		main {
+			box-sizing: border-box;
 			height: 100dvh;
 			padding: 16px;
+		}
+
+		:focus-visible {
+			outline: 2px solid var(--color-info-text);
+			outline-offset: 2px;
+		}
+
+		#background {
+			position: relative;
+			height: 100%;
+			border-radius: 16px;
+			overflow: hidden;
+			background-color: var(--color-bg);
+		}
+
+		#login {
+			position: relative;
+			height: 100%;
+		}
+
+		#panel {
+			box-sizing: border-box;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 32px;
+			height: 100%;
+			padding: 32px 24px;
+			border-radius: 16px;
+			background-color: var(--color-surface);
+			text-align: center;
+		}
+
+		h1 {
+			margin: 0;
+			font-family: var(--font-serif);
+			font-weight: 700;
+			font-size: 3rem;
+			line-height: 1.1;
+			color: var(--color-text);
+		}
+
+		#login-form,
+		.sent {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 24px;
+			width: 100%;
+			max-width: 380px;
+		}
+
+		.caption,
+		.sent-text,
+		.sent-retry {
+			margin: 0;
+			font-size: 1.125rem;
+			line-height: 1.5;
+			color: var(--color-text-muted);
+		}
+
+		.sent-email {
+			margin: 0;
+			font-size: 1.125rem;
+			color: var(--color-text);
+		}
+
+		.field {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+			width: 100%;
+		}
+
+		input {
+			height: 56px;
+			padding-inline: 18px;
+			border: 1px solid var(--color-border);
+			border-radius: 12px;
+			background-color: var(--color-surface-hover);
+			color: var(--color-text);
+			font: inherit;
+			font-size: 1.0625rem;
+		}
+
+		input::placeholder {
+			color: var(--color-text-muted);
+		}
+
+		input[aria-invalid='true'] {
+			border-color: var(--color-danger-border);
+		}
+
+		.error {
+			margin: 0;
+			font-size: 0.875rem;
+			text-align: left;
+			color: var(--color-danger-text);
+		}
+
+		#login-form :global(.pill) {
+			width: 100%;
+			height: 56px;
+			border-radius: 999px;
+			font: inherit;
+			font-size: 1.0625rem;
+			font-weight: 600;
+		}
+
+		.link {
+			padding: 0;
+			border: 0;
+			background: none;
+			font: inherit;
+			color: var(--color-info-text);
+			text-decoration: underline;
+			cursor: pointer;
 		}
 
 		[hidden] {
 			display: none !important;
 		}
 
-		.error {
-			margin: 0;
-			font-size: 0.875rem;
-			color: var(--color-danger-text);
-		}
-
-		:focus-visible{
-			outline: 3px dashed black;
-			outline-offset: 2px;
-		}
-
-		#background {
-			display: flex;
-			flex-flow: row nowrap;
-			justify-content: center;
-			height: 100%;
-			border-radius: 16px;
-			padding: 16px;
-			background-color: var(--color-surface);
-		}
-
-		#login {
-			width: 100vw;
-			padding: 16px;
-			border-radius: 16px;
-			display: flex;
-			flex-flow: column nowrap;
-			justify-content: center;
-			align-items: center;
-			background-color: var(--color-surface);
-			transition: width 0.3s ease;
-		}
-
-		#container {
-			max-width: 300px;
-			width: 100%;
-			display: flex;
-			flex-flow: column nowrap;
-			justify-content: center;
-		}
-
-		#login p {
-			line-height: 120%;
-			margin-bottom: 24px;
-			color: grey;
-			font-size: 1rem;
-			text-align: center;
-			font-family: Arial, Helvetica, sans-serif;
-		}
-
-		#login-form {
-			display: flex;
-			flex-direction: column;
-			align-items: stretch;
-			gap: 16px;
-		}
-		
-		#login-form input {
-			height: 48px;
-			border-radius: 8px;
-			border: none;
-			background-color: var(--color-surface-raised);
-			color: var(--color-text);
-			box-shadow: 0px 2px 5px 0px #0000001f;
-			padding-left: 16px;
-			font-size: 1rem;
-		}
-
-		.input {
-			display: flex;
-			flex-direction: column;
-			gap: 4px;
-		}
-
-		.action-bar {
-			display: flex;
-			flex-direction: column;
-			gap: 8px;
-		}
-
+		/* Desktop: backdrop à esquerda e o formulário ocupa a metade direita. */
 		@media (min-width: 900px) {
-		
 			#background {
-				justify-content: flex-end;
-				
 				background-image: var(--backdrop);
 				background-size: cover;
-				background-repeat: no-repeat;
-				background-position: center center;
+				background-position: center;
 			}
 
 			#login {
-			width: 50vw;
+				position: absolute;
+				top: 24px;
+				right: 24px;
+				bottom: 24px;
+				width: calc(50% - 24px);
+				height: auto;
+			}
+		}
+
+		/* Telas estreitas: sem backdrop, só o formulário. */
+		@media (max-width: 899px) {
+			#login {
+				height: 100%;
+			}
+
+			#panel {
+				border-radius: 16px;
+			}
+
+			h1 {
+				font-size: 2.5rem;
 			}
 		}
 	</style>
