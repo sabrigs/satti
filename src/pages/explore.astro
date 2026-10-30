@@ -3,25 +3,35 @@ import AppLayout from '../layouts/AppLayout.astro';
 import AddStatusButton from '../components/titles/AddStatusButton.astro';
 ---
 
-<AppLayout>
+<AppLayout fullWidth>
 	<section class="explore" aria-labelledby="explore-title">
-		<header class="explore-header">
-			<h1 id="explore-title">Explore</h1>
-			<button type="button" class="explore-icon-button" id="search-toggle" aria-expanded="false" aria-controls="search-field" aria-label="Search">
-				<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+		<h1 id="explore-title" class="sr-only">Explore</h1>
+
+		<div class="explore-bar">
+			<button type="button" class="explore-search-toggle" id="search-toggle" aria-expanded="false" aria-controls="search-field" aria-label="Search">
+				<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
 					<circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none" />
 					<path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
 				</svg>
 			</button>
-		</header>
 
-		<div id="search-field" class="explore-search" hidden>
-			<input id="search-input" type="search" placeholder="Search titles or artists" aria-label="Search titles or artists" autocomplete="off" />
-		</div>
+			<div id="search-field" class="explore-search">
+				<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+					<circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none" />
+					<path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+				</svg>
+				<input id="search-input" type="search" placeholder="Search" aria-label="Search titles or artists" autocomplete="off" />
+				<button type="button" id="search-close" class="explore-search__close" aria-label="Close search">
+					<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+						<path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+					</svg>
+				</button>
+			</div>
 
-		<div class="explore-tabs" role="tablist" aria-label="Explore categories">
-			<button type="button" role="tab" data-tab="trending" aria-selected="true">Trending</button>
-			<button type="button" role="tab" data-tab="theater" aria-selected="false">On Theater</button>
+			<div class="explore-tabs" role="tablist" aria-label="Explore categories">
+				<button type="button" role="tab" data-tab="trending" aria-selected="true">Trending</button>
+				<button type="button" role="tab" data-tab="theater" aria-selected="false">On Theater</button>
+			</div>
 		</div>
 
 		<div id="explore-status" class="explore-status" role="status" hidden>
@@ -37,10 +47,11 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 	<!-- Modelo de card: clonado pelo script para cada título retornado. -->
 	<template id="card-template">
 		<article class="explore-card">
-			<a class="explore-card__poster" href="/">
-				<img alt="" loading="lazy" />
-			</a>
-			<h2 class="explore-card__title"></h2>
+			<a class="explore-card__cover" href="/"></a>
+			<div class="explore-card__info">
+				<h2 class="explore-card__title"></h2>
+				<p class="explore-card__meta"></p>
+			</div>
 			<AddStatusButton tmdbId={0} mediaType="movie" title="" posterPath={null} />
 		</article>
 	</template>
@@ -52,7 +63,14 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 		import { isReturningVisit, loadScreenState, onLeave, saveScreenState } from '../lib/ui/navigation';
 
 		type Tab = 'trending' | 'theater';
-		type Item = { id: number; mediaType: 'movie' | 'tv'; title: string; posterPath: string | null };
+		type Item = {
+			id: number;
+			mediaType: 'movie' | 'tv';
+			title: string;
+			posterPath: string | null;
+			backdropPath: string | null;
+			voteAverage: number;
+		};
 
 		const STATE_KEY = 'aurora:explore';
 
@@ -166,19 +184,22 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 
 		const makeCard = (item: Item) => {
 			const node = cardTemplate.content.firstElementChild!.cloneNode(true) as HTMLElement;
-			const link = node.querySelector<HTMLAnchorElement>('a')!;
-			link.href = `/title/${item.mediaType}/${item.id}`;
-			link.setAttribute('aria-label', item.title);
+			const cover = node.querySelector<HTMLAnchorElement>('.explore-card__cover')!;
+			cover.href = `/title/${item.mediaType}/${item.id}`;
+			cover.setAttribute('aria-label', item.title);
 
-			const img = node.querySelector<HTMLImageElement>('img')!;
-			const poster = posterUrl(item.posterPath);
-			if (poster) {
-				img.src = poster;
-			} else {
-				img.replaceWith(Object.assign(document.createElement('span'), { className: 'explore-card__silhouette' }));
+			// Fundo: backdrop do título; sem backdrop, usa o pôster.
+			const backdrop = item.backdropPath ? `https://image.tmdb.org/t/p/w780${item.backdropPath}` : posterUrl(item.posterPath, 'w500');
+			if (backdrop) {
+				node.style.backgroundImage = `url("${backdrop}")`;
 			}
 
 			node.querySelector<HTMLElement>('.explore-card__title')!.textContent = item.title;
+			const meta = [
+				item.mediaType === 'movie' ? 'Movie' : 'Series',
+				item.voteAverage > 0 ? `★ ${item.voteAverage.toFixed(1)}` : null,
+			].filter(Boolean);
+			node.querySelector<HTMLElement>('.explore-card__meta')!.textContent = meta.join(' · ');
 
 			const root = node.querySelector<HTMLElement>('[data-add-status]')!;
 			root.dataset.tmdbId = String(item.id);
@@ -301,10 +322,7 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 			state.items = saved.items;
 
 			searchInput.value = saved.query;
-			if (saved.query) {
-				searchField.hidden = false;
-				searchToggle.setAttribute('aria-expanded', 'true');
-			}
+			if (saved.query) setSearching(true);
 			tabButtons.forEach((button) =>
 				button.setAttribute('aria-selected', String(button.dataset.tab === saved.tab)),
 			);
@@ -328,11 +346,23 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 			button.addEventListener('click', () => selectTab(button.dataset.tab as Tab));
 		});
 
-		searchToggle.addEventListener('click', () => {
-			const open = searchField.hidden;
-			searchField.hidden = !open;
-			searchToggle.setAttribute('aria-expanded', String(open));
-			if (open) searchInput.focus();
+		// Busca: o campo expande dentro da barra. No mobile substitui as tabs.
+		const bar = document.querySelector<HTMLElement>('.explore-bar')!;
+		const setSearching = (searching: boolean) => {
+			bar.classList.toggle('is-searching', searching);
+			searchToggle.setAttribute('aria-expanded', String(searching));
+			if (searching) searchInput.focus();
+		};
+
+		searchToggle.addEventListener('click', () => setSearching(true));
+
+		document.getElementById('search-close')?.addEventListener('click', () => {
+			setSearching(false);
+			searchInput.value = '';
+			if (state.query) {
+				state.query = '';
+				void reset();
+			}
 		});
 
 		let searchTimer: number | undefined;
@@ -395,64 +425,142 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 		gap: 16px;
 	}
 
-	.explore-header {
+	.explore .sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	/* Barra de tabs: busca à esquerda, tabs à direita. */
+	.explore-bar {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-	}
-
-	.explore-header h1 {
+		gap: 8px;
+		align-self: center;
+		width: fit-content;
+		max-width: 100%;
 		margin: 0;
-		font-size: 2rem;
-		font-weight: 600;
-		color: var(--color-text);
+		padding: 6px;
+		border-radius: 999px;
+		border: 1px solid var(--color-border);
+		background-color: var(--color-surface);
 	}
 
-	.explore-icon-button {
+	.explore-search-toggle {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		flex-shrink: 0;
 		width: 40px;
 		height: 40px;
+		border: 0;
 		border-radius: 999px;
-		border: 1px solid var(--color-border-strong);
-		background-color: var(--color-surface-raised);
-		color: var(--color-text);
+		background: none;
+		color: var(--color-text-muted);
 		cursor: pointer;
 	}
 
-	.explore-search input {
-		width: 100%;
-		height: 44px;
-		padding-inline: 16px;
-		border: 0;
-		border-radius: 10px;
+	.explore-bar.is-searching .explore-search-toggle {
+		display: none;
+	}
+
+	/* Campo de busca: a largura é animada, e a barra acompanha (ela se ajusta ao conteúdo). */
+	.explore-search {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		box-sizing: border-box;
+		flex: 0 0 auto;
+		width: 0;
+		height: 40px;
+		padding-inline: 0;
+		overflow: hidden;
+		border-radius: 999px;
 		background-color: var(--color-surface-raised);
+		color: var(--color-text-muted);
+		opacity: 0;
+		visibility: hidden;
+		transition: width 260ms ease, padding 260ms ease, opacity 200ms ease, visibility 0s linear 260ms;
+	}
+
+	.explore-bar.is-searching .explore-search {
+		width: 320px;
+		padding-inline: 14px;
+		opacity: 1;
+		visibility: visible;
+		transition: width 260ms ease, padding 260ms ease, opacity 200ms ease 60ms, visibility 0s;
+	}
+
+	@media (max-width: 767px) {
+		.explore-bar.is-searching .explore-search {
+			width: calc(100vw - 50px);
+			max-width: 560px;
+		}
+	}
+
+	.explore-search input {
+		flex: 1 1 auto;
+		width: 0;
+		min-width: 0;
+		height: 100%;
+		padding: 0;
+		border: 0;
+		background: none;
 		color: var(--color-text);
+		font: inherit;
 		font-size: 1rem;
+		outline: none;
+	}
+
+	.explore-search input::placeholder {
+		color: var(--color-text-muted);
+	}
+
+	.explore-search__close {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 28px;
+		height: 28px;
+		border: 0;
+		border-radius: 999px;
+		background: none;
+		color: var(--color-text-muted);
+		cursor: pointer;
 	}
 
 	.explore-tabs {
 		display: flex;
-		gap: 8px;
-		overflow-x: auto;
+		gap: 4px;
+		flex: 0 0 auto;
 	}
 
 	.explore-tabs [role='tab'] {
-		padding: 8px 14px;
+		padding: 8px 16px;
+		border: 0;
 		border-radius: 999px;
-		border: 1px solid var(--color-border);
 		background: none;
 		color: var(--color-text-muted);
 		font: inherit;
+		font-weight: 500;
 		white-space: nowrap;
 		cursor: pointer;
 	}
 
 	.explore-tabs [role='tab'][aria-selected='true'] {
-		background-color: var(--color-solid);
-		color: var(--color-on-solid);
-		border-color: var(--color-solid);
+		background-color: var(--color-surface-hover);
+		color: var(--color-text);
+	}
+
+	@media (max-width: 767px) {
+		/* No mobile, a busca substitui as tabs enquanto está aberta. */
+		.explore-bar.is-searching .explore-tabs {
+			display: none;
+		}
 	}
 
 	.explore-status {
@@ -474,58 +582,88 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 		cursor: pointer;
 	}
 
+	/* Cards: 3 colunas no desktop, 2 no tablet e 1 no mobile, com 16px de gap. */
 	.explore-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-		gap: 20px 16px;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 16px;
+	}
+
+	@media (max-width: 1023px) {
+		.explore-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	@media (max-width: 767px) {
+		.explore-grid {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 
 	.explore-card {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.explore-card__poster {
-		display: block;
-		aspect-ratio: 2 / 3;
-		border-radius: 12px;
+		position: relative;
+		isolation: isolate;
+		aspect-ratio: 16 / 9;
+		border-radius: 16px;
+		clip-path: inset(0 round 16px);
 		overflow: hidden;
 		background-color: var(--color-surface-raised);
-		border: 1px solid var(--color-border);
+		background-size: cover;
+		background-position: center;
 	}
 
-	.explore-card__poster img {
-		display: block;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
+	.explore-card::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		background: linear-gradient(180deg, #00000000 35%, #000000cc 100%);
+		pointer-events: none;
 	}
 
-	.explore-card__silhouette {
-		display: block;
-		width: 100%;
-		height: 100%;
-		background-image: linear-gradient(180deg, var(--color-surface-hover), var(--color-surface-raised));
+	.explore-card__cover {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		border-radius: inherit;
+	}
+
+	.explore-card__info {
+		position: absolute;
+		left: 16px;
+		right: 16px;
+		bottom: 16px;
+		z-index: 2;
+		pointer-events: none;
+		color: #fff;
 	}
 
 	.explore-card__title {
 		margin: 0;
-		font-size: 0.9375rem;
-		font-weight: 500;
-		color: var(--color-text);
+		font-size: 1.25rem;
+		font-weight: 600;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
+	.explore-card__meta {
+		margin: 4px 0 0;
+		font-size: 0.9375rem;
+		color: #ffffffcc;
+	}
+
 	.explore-card .add-status {
-		align-self: flex-start;
+		position: absolute;
+		top: 12px;
+		right: 12px;
+		z-index: 3;
 	}
 
 	.explore-skeleton {
-		aspect-ratio: 2 / 3;
-		border-radius: 12px;
+		aspect-ratio: 16 / 9;
+		border-radius: 16px;
 		background: linear-gradient(90deg, var(--color-surface) 25%, var(--color-surface-hover) 50%, var(--color-surface) 75%);
 		background-size: 200% 100%;
 		animation: explore-shimmer 1.2s linear infinite;
@@ -546,8 +684,11 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.explore-skeleton {
+		.explore-skeleton,
+		.explore-search,
+		.explore-bar.is-searching .explore-search {
 			animation: none;
+			transition: none;
 		}
 	}
 </style>

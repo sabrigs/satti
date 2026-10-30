@@ -35,6 +35,15 @@ const tokensStyle = `<style>${themeCss()}</style>`;
         margin: 0;
 	}
 
+	/* A barra de rolagem fica invisível e não ocupa espaço lateral. */
+	html {
+		scrollbar-width: none;
+	}
+
+	html::-webkit-scrollbar {
+		display: none;
+	}
+
 	body {
 		background-color: var(--color-bg);
 		color: var(--color-text);
