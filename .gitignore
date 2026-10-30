@@ -26,3 +26,5 @@ pnpm-debug.log*
 # local env files (segredos)
 .env.local
 .env.*.local
+.vercel
+.env*
