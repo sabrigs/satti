@@ -15,9 +15,9 @@ const { kind, name } = Astro.props;
     <span class="count" data-count aria-label="Titles in list">0</span>
   </div>
   <div class="fan" aria-hidden="true">
-    <span class="poster poster--silhouette" data-poster></span>
-    <span class="poster poster--silhouette" data-poster></span>
-    <span class="poster poster--silhouette" data-poster></span>
+    <span class="poster poster--loading" data-poster></span>
+    <span class="poster poster--loading" data-poster></span>
+    <span class="poster poster--loading" data-poster></span>
   </div>
 </a>
 
@@ -25,13 +25,14 @@ const { kind, name } = Astro.props;
   .list-card {
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding: 16px;
+    gap: 12px;
+    height: 340px;
+    padding: 20px 20px 0;
     border-radius: 16px;
-    border: 1px solid var(--color-border);
     background-color: var(--color-surface);
     color: var(--color-text);
     text-decoration: none;
+    overflow: hidden;
   }
 
   .list-card:hover {
@@ -40,63 +41,84 @@ const { kind, name } = Astro.props;
 
   .list-card__header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 8px;
   }
 
   h2 {
     margin: 0;
-    font-size: 1.125rem;
+    font-size: 1.25rem;
     font-weight: 600;
   }
 
   .count {
-    min-width: 28px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background-color: var(--color-surface-hover);
+    font-size: 1.125rem;
     color: var(--color-text-muted);
-    font-size: 0.8125rem;
-    text-align: center;
   }
 
+  /* Leque de pôsteres ancorado na borda inferior do card, cortado por ela. */
   .fan {
     position: relative;
-    height: 170px;
-    margin-top: 4px;
+    flex: 1;
   }
 
   .poster {
     position: absolute;
-    top: 0;
+    bottom: -48px;
     left: 50%;
-    width: 100px;
+    width: 130px;
     aspect-ratio: 2 / 3;
-    margin-left: -50px;
-    border-radius: 10px;
-    border: 1px solid var(--color-border-strong);
+    margin-left: -65px;
+    border-radius: 12px;
     background-color: var(--color-surface-raised);
-    box-shadow: 0 6px 16px #00000055;
+    background-size: cover;
+    background-position: center;
+    box-shadow: 0 8px 24px #00000066;
     transform-origin: 50% 100%;
   }
 
   .poster:nth-child(1) {
-    transform: rotate(-12deg) translateX(-56px);
+    transform: translateX(-90px) rotate(-10deg);
     z-index: 1;
   }
 
+  /* Centro maior e mais alto que os das laterais. */
   .poster:nth-child(2) {
-    transform: rotate(0deg);
-    z-index: 2;
+    width: 160px;
+    margin-left: -80px;
+    transform: translateY(-16px);
+    z-index: 3;
   }
 
   .poster:nth-child(3) {
-    transform: rotate(12deg) translateX(56px);
-    z-index: 1;
+    transform: translateX(90px) rotate(10deg);
+    z-index: 2;
+  }
+
+  /* Skeleton enquanto a lista carrega; vira o pôster, ou a silhueta se a lista estiver vazia. */
+  .poster--loading {
+    background: linear-gradient(90deg, var(--color-surface-raised) 25%, var(--color-surface-hover) 50%, var(--color-surface-raised) 75%);
+    background-size: 200% 100%;
+    animation: poster-shimmer 1.2s linear infinite;
   }
 
   .poster--silhouette {
     background-image: linear-gradient(180deg, var(--color-surface-hover), var(--color-surface-raised));
+  }
+
+  @keyframes poster-shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .poster--loading {
+      animation: none;
+    }
   }
 </style>

@@ -233,6 +233,9 @@ const poster = posterUrl(details.posterPath, 'w342');
 <script>
 	import { bindBackLink } from '../../../lib/ui/navigation';
 
-	const back = document.querySelector<HTMLAnchorElement>('[data-back]');
-	if (back) bindBackLink(back);
+	// A navegação troca a página sem recarregar o script: liga o botão a cada visita.
+	document.addEventListener('astro:page-load', () => {
+		const back = document.querySelector<HTMLAnchorElement>('[data-back]');
+		if (back) bindBackLink(back);
+	});
 </script>

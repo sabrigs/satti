@@ -26,7 +26,21 @@ export interface StreamingRow {
 
 export const LISTS_CHANGED_EVENT = 'aurora:lists-changed';
 
-const notifyListsChanged = () => window.dispatchEvent(new Event(LISTS_CHANGED_EVENT));
+// Cache em memória das listas. Vale durante a sessão da aba (a navegação não recarrega o JS),
+// e é descartado sempre que uma lista muda.
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let summaryCache: { value: Promise<ListSummary[]>; expires: number } | null = null;
+const itemsCache = new Map<SystemKind, { value: Promise<ListItem[]>; expires: number }>();
+
+const invalidateListCache = () => {
+  summaryCache = null;
+  itemsCache.clear();
+};
+
+const notifyListsChanged = () => {
+  invalidateListCache();
+  window.dispatchEvent(new Event(LISTS_CHANGED_EVENT));
+};
 
 async function currentUserId(): Promise<string> {
   const { data } = await supabase.auth.getSession();
@@ -69,17 +83,61 @@ async function deleteItem(kind: SystemKind, ref: TitleRef) {
 }
 
 // Listas em que o título está (to_watch, watched, favorites).
-export async function getTitleStatus(ref: Pick<TitleRef, 'tmdbId' | 'mediaType'>): Promise<Set<SystemKind>> {
+// As consultas feitas no mesmo ciclo (ex.: todos os cards de uma página) viram uma só.
+type StatusRequest = {
+  ref: Pick<TitleRef, 'tmdbId' | 'mediaType'>;
+  resolve: (status: Set<SystemKind>) => void;
+  reject: (error: unknown) => void;
+};
+
+let pendingStatus: StatusRequest[] = [];
+let statusFlushScheduled = false;
+
+const statusKey = (ref: Pick<TitleRef, 'tmdbId' | 'mediaType'>) => `${ref.mediaType}:${ref.tmdbId}`;
+
+async function flushStatusRequests() {
+  const batch = pendingStatus;
+  pendingStatus = [];
+  statusFlushScheduled = false;
+
+  const ids = [...new Set(batch.map((request) => request.ref.tmdbId))];
   const { data, error } = await supabase
     .from('list_items')
-    .select('lists(kind)')
-    .eq('tmdb_id', ref.tmdbId)
-    .eq('media_type', ref.mediaType);
-  if (error) throw error;
+    .select('tmdb_id, media_type, lists(kind)')
+    .in('tmdb_id', ids);
 
-  const rows = (data ?? []) as unknown as { lists: { kind: SystemKind } | null }[];
-  const kinds = rows.map((row) => row.lists?.kind);
-  return new Set(kinds.filter((kind): kind is SystemKind => Boolean(kind)));
+  if (error) {
+    batch.forEach((request) => request.reject(error));
+    return;
+  }
+
+  const kindsByTitle = new Map<string, Set<SystemKind>>();
+  const rows = (data ?? []) as unknown as {
+    tmdb_id: number;
+    media_type: MediaType;
+    lists: { kind: SystemKind } | null;
+  }[];
+  for (const row of rows) {
+    const key = `${row.media_type}:${row.tmdb_id}`;
+    const kinds = kindsByTitle.get(key) ?? new Set<SystemKind>();
+    if (row.lists?.kind) kinds.add(row.lists.kind);
+    kindsByTitle.set(key, kinds);
+  }
+
+  for (const request of batch) {
+    request.resolve(new Set(kindsByTitle.get(statusKey(request.ref)) ?? []));
+  }
+}
+
+export function getTitleStatus(ref: Pick<TitleRef, 'tmdbId' | 'mediaType'>): Promise<Set<SystemKind>> {
+  return new Promise((resolve, reject) => {
+    pendingStatus.push({ ref, resolve, reject });
+    if (!statusFlushScheduled) {
+      statusFlushScheduled = true;
+      // Espera o restante do ciclo síncrono (criação dos cards) antes de consultar.
+      queueMicrotask(() => void flushStatusRequests());
+    }
+  });
 }
 
 // Ações do dropdown de "Add/status". Cada uma respeita as regras de exclusividade.
@@ -122,7 +180,21 @@ export const removeFromFavorites = async (ref: TitleRef) => {
 };
 
 // Resumo para a Home: contador e últimos 3 títulos adicionados de cada lista de sistema.
-export async function getListSummaries(): Promise<ListSummary[]> {
+export function getListSummaries(): Promise<ListSummary[]> {
+  if (summaryCache && summaryCache.expires > Date.now()) {
+    return summaryCache.value;
+  }
+
+  const value = fetchListSummaries();
+  summaryCache = { value, expires: Date.now() + CACHE_TTL_MS };
+  // Falha não fica em cache: a próxima visita tenta de novo.
+  value.catch(() => {
+    summaryCache = null;
+  });
+  return value;
+}
+
+async function fetchListSummaries(): Promise<ListSummary[]> {
   const { data, error } = await supabase
     .from('lists')
     .select('id, kind, list_items(count)')
@@ -199,7 +271,19 @@ export interface ListItem {
 }
 
 // Itens de uma lista de sistema, do mais recente para o mais antigo.
-export async function getListItems(kind: SystemKind): Promise<ListItem[]> {
+export function getListItems(kind: SystemKind): Promise<ListItem[]> {
+  const cached = itemsCache.get(kind);
+  if (cached && cached.expires > Date.now()) {
+    return cached.value;
+  }
+
+  const value = fetchListItems(kind);
+  itemsCache.set(kind, { value, expires: Date.now() + CACHE_TTL_MS });
+  value.catch(() => itemsCache.delete(kind));
+  return value;
+}
+
+async function fetchListItems(kind: SystemKind): Promise<ListItem[]> {
   const listId = await listIdFor(kind);
   const { data, error } = await supabase
     .from('list_items')

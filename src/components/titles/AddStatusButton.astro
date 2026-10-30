@@ -81,7 +81,10 @@ const { tmdbId, mediaType, title, posterPath } = Astro.props;
 <script>
   import { initAddStatus } from '../../lib/lists/add-status';
 
-  document.querySelectorAll<HTMLElement>('[data-add-status]').forEach((root) => {
-    void initAddStatus(root);
+  // A navegação troca a página sem recarregar o script: inicializa a cada visita.
+  document.addEventListener('astro:page-load', () => {
+    document.querySelectorAll<HTMLElement>('[data-add-status]').forEach((root) => {
+      void initAddStatus(root);
+    });
   });
 </script>

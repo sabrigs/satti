@@ -49,13 +49,20 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 		import { supabase } from '../lib/supabase.js';
 		import { initAddStatus } from '../lib/lists/add-status';
 		import { posterUrl } from '../lib/tmdb/images';
-		import { isBackNavigation, loadScreenState, saveScreenState } from '../lib/ui/navigation';
+		import { isReturningVisit, loadScreenState, onLeave, saveScreenState } from '../lib/ui/navigation';
 
 		type Tab = 'trending' | 'theater';
 		type Item = { id: number; mediaType: 'movie' | 'tv'; title: string; posterPath: string | null };
 
 		const STATE_KEY = 'aurora:explore';
 
+		// A navegação troca a página sem recarregar o script, então a tela é montada a cada visita.
+		let currentSave: () => void = () => {};
+		let observer: IntersectionObserver | null = null;
+
+		onLeave(() => currentSave());
+
+		const setupExplore = async () => {
 		const grid = document.getElementById('explore-grid') as HTMLDivElement;
 		const cardTemplate = document.getElementById('card-template') as HTMLTemplateElement;
 		const sentinel = document.getElementById('explore-sentinel') as HTMLDivElement;
@@ -341,7 +348,8 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 		});
 
 		// Scroll infinito: carrega a próxima página quando o final da grid aparece.
-		const observer = new IntersectionObserver((entries) => {
+		observer?.disconnect();
+		observer = new IntersectionObserver((entries) => {
 			if (entries.some((entry) => entry.isIntersecting)) {
 				void loadNext();
 			}
@@ -349,7 +357,7 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 		observer.observe(sentinel);
 
 		// Ao sair da tela (ex.: abrir um título), guarda aba, busca, itens e posição.
-		window.addEventListener('pagehide', () => {
+		currentSave = () => {
 			saveScreenState(STATE_KEY, {
 				tab: state.tab,
 				query: state.query,
@@ -358,20 +366,25 @@ import AddStatusButton from '../components/titles/AddStatusButton.astro';
 				items: state.items,
 				scrollY: window.scrollY,
 			});
-		});
+		};
 
 		// Mesma proteção das outras telas: sem sessão, volta para o login.
 		const { data: sessionData } = await supabase.auth.getSession();
 		if (!sessionData.session) {
 			window.location.replace('/login');
 		} else {
-			const saved = isBackNavigation() ? loadScreenState<ScreenState>(STATE_KEY) : null;
+			const saved = isReturningVisit() ? loadScreenState<ScreenState>(STATE_KEY) : null;
 			if (saved) {
 				restore(saved);
 			} else {
 				void reset();
 			}
 		}
+		};
+
+		document.addEventListener('astro:page-load', () => {
+			if (document.getElementById('explore-grid')) void setupExplore();
+		});
 	</script>
 </AppLayout>
 

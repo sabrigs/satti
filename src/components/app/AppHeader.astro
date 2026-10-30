@@ -18,6 +18,23 @@ const current = (href: string) => (path === href ? 'page' : undefined);
 	</div>
 </header>
 
+<script>
+	// A navbar fica persistente entre navegações: atualiza o link da página atual.
+	const markCurrentPage = () => {
+		const path = window.location.pathname;
+		document.querySelectorAll<HTMLAnchorElement>('.app-header a[href]').forEach((link) => {
+			if (link.getAttribute('href') === path) {
+				link.setAttribute('aria-current', 'page');
+			} else {
+				link.removeAttribute('aria-current');
+			}
+		});
+	};
+
+	markCurrentPage();
+	document.addEventListener('astro:page-load', markCurrentPage);
+</script>
+
 <style>
 	.app-header {
 		display: flex;
@@ -28,13 +45,13 @@ const current = (href: string) => (path === href ? 'page' : undefined);
 		z-index: 20;
 		height: 64px;
 		padding-inline: 16px;
-		border-bottom: 1px solid var(--color-border);
 		background-color: var(--color-bg);
 	}
 
 	.logo {
 		font-family: var(--font-serif);
-		font-size: 1.5rem;
+		font-size: 2rem;
+		font-weight: 700;
 		color: var(--color-text);
 		text-decoration: none;
 	}
@@ -48,13 +65,18 @@ const current = (href: string) => (path === href ? 'page' : undefined);
 	.desktop-nav a {
 		padding: 8px 12px;
 		border-radius: 8px;
-		color: var(--color-text-muted);
+		font-size: 1.0625rem;
+		font-weight: 500;
+		color: var(--color-text);
 		text-decoration: none;
 	}
 
-	.desktop-nav a[aria-current='page'],
+	.desktop-nav a[aria-current='page'] {
+		text-decoration: underline;
+		text-underline-offset: 6px;
+	}
+
 	.desktop-nav a:hover {
-		color: var(--color-text);
 		background-color: var(--color-surface-hover);
 	}
 

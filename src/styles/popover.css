@@ -33,9 +33,23 @@ dialog.popover[open] {
     width: 100%;
     max-height: 80dvh;
     overflow-y: auto;
-    border-radius: 16px 16px 0 0;
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
+    z-index: 30;
+    border: 0;
+    border-radius: 24px 24px 0 0;
+    background-color: var(--color-surface);
     box-shadow: none;
+  }
+
+  /* Alça de arrastar, no topo do bottom sheet. */
+  dialog.popover::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 5px;
+    margin: 0 auto 12px;
+    border-radius: 999px;
+    background-color: var(--color-border-strong);
   }
 
   dialog.popover::backdrop {
@@ -50,28 +64,31 @@ dialog.popover[open] {
 }
 
 .menu-header {
-  padding: 8px 12px 12px;
-  border-bottom: 1px solid var(--color-border);
-  margin-bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 12px 20px;
+  margin-bottom: 8px;
 }
 
 .menu-header strong {
-  display: block;
-  font-size: 1rem;
+  font-size: 1.25rem;
+  font-weight: 600;
 }
 
 .menu-header span,
 .menu-section-title {
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   color: var(--color-text-muted);
 }
 
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 14px 12px;
+  font-size: 1.0625rem;
   border: 0;
   border-radius: 8px;
   background: none;
@@ -117,19 +134,36 @@ dialog.popover[open] {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
   border: 1.5px solid var(--color-border-strong);
-  font-size: 0.75rem;
-  color: var(--color-on-solid);
+  background-color: var(--color-surface-hover);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #fff;
 }
 
 .check-item[aria-checked='true'] .check-box {
-  background-color: var(--color-success-solid);
-  border-color: var(--color-success-solid);
+  background-color: var(--color-selected);
+  border-color: var(--color-selected);
 }
 
 .check-item[aria-checked='true'] .check-box::before {
   content: '✓';
+}
+
+/* Ícone à esquerda, texto ocupando o espaço e seta à direita (My streamings). */
+.menu-item > span {
+  flex: 1;
+}
+
+/* A caixa do checkbox mantém o tamanho, mesmo sendo um span dentro do item. */
+.menu-item > .check-box {
+  flex: 0 0 22px;
+}
+
+.menu-item .chevron {
+  margin-left: auto;
+  color: var(--color-text-muted);
 }

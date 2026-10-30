@@ -1,4 +1,5 @@
 ---
+import { ClientRouter } from 'astro:transitions';
 import { themeCss } from '../styles/tokens';
 
 const tokensStyle = `<style>${themeCss()}</style>`;
@@ -19,6 +20,7 @@ const tokensStyle = `<style>${themeCss()}</style>`;
         rel="stylesheet"
     />
     <Fragment set:html={tokensStyle} />
+    <ClientRouter />
     <slot name="head" />
 </head>
 <body>

@@ -94,6 +94,9 @@ export const semanticTokens = (
     // Destaque (estados positivos, ex.: badge "adicionado" / "assistido")
     ...successTokens(theme, success),
 
+    // Seleção (checkboxes marcados)
+    '--color-selected': i.blue9,
+
     // Erro (ex.: mensagem abaixo do campo de e-mail)
     '--color-danger-bg': d.red3,
     '--color-danger-border': d.red6,

@@ -3,9 +3,9 @@ import AppLayout from '../layouts/AppLayout.astro';
 import ListCard from '../components/lists/ListCard.astro';
 ---
 
-<AppLayout>
+<AppLayout fullWidth>
 	<section class="home">
-		<h1>My lists</h1>
+		<h1 class="sr-only">My lists</h1>
 		<div class="cards">
 			<ListCard kind="to_watch" name="To watch" />
 			<ListCard kind="favorites" name="Favorites" />
@@ -18,6 +18,14 @@ import ListCard from '../components/lists/ListCard.astro';
 		import { getListSummaries, LISTS_CHANGED_EVENT, type ListSummary } from '../lib/lists/store';
 		import { posterUrl } from '../lib/tmdb/images';
 
+		// A navegação troca a página sem recarregar o script, então a tela é montada a cada visita.
+		// Depois que o onboarding é concluído, não muda mais nesta aba: não precisa consultar de novo.
+		// Fica fora da montagem da tela, para sobreviver às navegações.
+		let onboardingDone = false;
+		let homeRefresh: (() => Promise<void>) | null = null;
+		window.addEventListener(LISTS_CHANGED_EVENT, () => void homeRefresh?.());
+
+		const setupHome = () => {
 		// Proteção da rota: sem sessão vai para o login; sem onboarding vai para o onboarding.
 		const redirectIfNeeded = async () => {
 			const { data: sessionData } = await supabase.auth.getSession();
@@ -26,6 +34,7 @@ import ListCard from '../components/lists/ListCard.astro';
 				window.location.replace('/login');
 				return false;
 			}
+			if (onboardingDone) return true;
 
 			const { data: profile } = await supabase
 				.from('profiles')
@@ -36,6 +45,7 @@ import ListCard from '../components/lists/ListCard.astro';
 				window.location.replace('/onboarding');
 				return false;
 			}
+			onboardingDone = true;
 			return true;
 		};
 
@@ -54,10 +64,12 @@ import ListCard from '../components/lists/ListCard.astro';
 				const item = summary.recent[position];
 				const poster = posterUrl(item?.posterPath ?? null);
 
+				slot.classList.remove('poster--loading');
 				if (poster) {
-					slot.classList.remove('poster--silhouette');
 					slot.style.backgroundImage = `url("${poster}")`;
 					slot.style.backgroundSize = 'cover';
+				} else {
+					slot.classList.add('poster--silhouette');
 				}
 			});
 		};
@@ -68,14 +80,23 @@ import ListCard from '../components/lists/ListCard.astro';
 				summaries.forEach(renderCard);
 			} catch (error) {
 				console.error(error);
+				// Sem dados: os pôsteres param de carregar e mostram a silhueta.
+				document.querySelectorAll('[data-poster].poster--loading').forEach((slot) => {
+					slot.classList.remove('poster--loading');
+					slot.classList.add('poster--silhouette');
+				});
 			}
 		};
 
-		redirectIfNeeded().then((ok) => {
-			if (ok) refresh();
-		});
+			homeRefresh = refresh;
+			redirectIfNeeded().then((ok) => {
+				if (ok) refresh();
+			});
+		};
 
-		window.addEventListener(LISTS_CHANGED_EVENT, refresh);
+		document.addEventListener('astro:page-load', () => {
+			if (document.querySelector('.home')) setupHome();
+		});
 	</script>
 </AppLayout>
 
@@ -86,16 +107,26 @@ import ListCard from '../components/lists/ListCard.astro';
 		gap: 24px;
 	}
 
-	h1 {
-		margin: 0;
-		font-size: 2rem;
-		font-weight: 600;
-		color: var(--color-text);
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
 	}
 
+	/* Três cards lado a lado ocupando toda a largura; empilhados em telas estreitas. */
 	.cards {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 16px;
+		width: 100%;
+	}
+
+	@media (max-width: 767px) {
+		.cards {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 </style>

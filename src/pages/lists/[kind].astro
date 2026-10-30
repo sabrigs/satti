@@ -53,9 +53,11 @@ const name = LIST_NAMES[kind];
 		import { getListItems, getUserStreamings, type ListItem, type StreamingRow, type SystemKind } from '../../lib/lists/store';
 		import { posterUrl } from '../../lib/tmdb/images';
 		import { enableLightDismiss, openPopover } from '../../lib/ui/popover';
-		import { isBackNavigation, loadScreenState, saveScreenState } from '../../lib/ui/navigation';
+		import { isReturningVisit, loadScreenState, saveScreenState } from '../../lib/ui/navigation';
 		import { brandName } from '../../lib/streaming/canonical';
 
+		// A navegação troca a página sem recarregar o script, então a tela é montada a cada visita.
+		const setupList = () => {
 		const section = document.querySelector<HTMLElement>('.list')!;
 		const kind = section.dataset.kind as SystemKind;
 		const grid = document.getElementById('grid') as HTMLDivElement;
@@ -191,7 +193,7 @@ const name = LIST_NAMES[kind];
 
 			try {
 				// Ao voltar de um título, mantém o streaming e a ordenação escolhidos.
-				const saved = isBackNavigation() ? loadScreenState<typeof state>(STATE_KEY) : null;
+				const saved = isReturningVisit() ? loadScreenState<typeof state>(STATE_KEY) : null;
 				if (saved) Object.assign(state, saved);
 
 				[items, streamings] = await Promise.all([getListItems(kind), getUserStreamings()]);
@@ -206,6 +208,11 @@ const name = LIST_NAMES[kind];
 		};
 
 		load();
+		};
+
+		document.addEventListener('astro:page-load', () => {
+			if (document.querySelector('.list')) setupList();
+		});
 	</script>
 </AppLayout>
 

@@ -1,9 +1,18 @@
 // Navegação de volta: restaura o estado da tela anterior quando o usuário volta pelo histórico.
 
-// True quando a página foi aberta pelo botão voltar/avançar do navegador.
-export function isBackNavigation(): boolean {
-  const [entry] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
-  return entry?.type === 'back_forward';
+// True quando esta entrada do histórico já foi visitada antes (ex.: o usuário voltou para ela).
+// Marca a entrada na primeira visita, então funciona com navegação completa e com a
+// navegação sem recarregar a página (ClientRouter).
+export function isReturningVisit(): boolean {
+  const returning = history.state?.auroraVisited === true;
+  history.replaceState({ ...history.state, auroraVisited: true }, '');
+  return returning;
+}
+
+// Executa `save` antes de sair da tela, seja por recarregamento ou por navegação interna.
+export function onLeave(save: () => void) {
+  window.addEventListener('pagehide', save);
+  document.addEventListener('astro:before-preparation', save);
 }
 
 // Estado guardado por tela (aba, filtros, itens já carregados) entre navegações.
@@ -24,11 +33,10 @@ export function loadScreenState<T>(key: string): T | null {
   }
 }
 
-// Botão "Back" de um título: volta no histórico quando a página anterior é do próprio app.
+// Botão "Back" de um título: volta no histórico quando há uma página anterior nesta aba.
 export function bindBackLink(link: HTMLAnchorElement) {
   link.addEventListener('click', (event) => {
-    const cameFromApp = document.referrer !== '' && new URL(document.referrer).origin === window.location.origin;
-    if (cameFromApp && history.length > 1) {
+    if (history.length > 1) {
       event.preventDefault();
       history.back();
     }

@@ -1,12 +1,24 @@
 ---
-// Toolbar fixa no mobile, com "My lists" e "Explore" como tabs.
+// Toolbar flutuante e fixa embaixo, no mobile, com "My lists" e "Explore".
 const path = Astro.url.pathname;
 const current = (href: string) => (path === href ? 'page' : undefined);
 ---
 
 <nav class="bottom-nav" aria-label="Main">
-	<a href="/" aria-current={current('/')}>My lists</a>
-	<a href="/explore" aria-current={current('/explore')}>Explore</a>
+	<a href="/" aria-current={current('/')}>
+		<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+			<rect x="3" y="7" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.8" fill="none" />
+			<path d="M9 3l3 4 3-4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" />
+		</svg>
+		<span>My lists</span>
+	</a>
+	<a href="/explore" aria-current={current('/explore')}>
+		<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+			<circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8" fill="none" />
+			<path d="M20 20l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+		</svg>
+		<span>Explore</span>
+	</a>
 </nav>
 
 <style>
@@ -17,20 +29,30 @@ const current = (href: string) => (path === href ? 'page' : undefined);
 	@media (max-width: 767px) {
 		.bottom-nav {
 			position: fixed;
-			inset: auto 0 0 0;
-			display: grid;
-			grid-template-columns: 1fr 1fr;
-			padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
-			border-top: 1px solid var(--color-border);
+			left: 50%;
+			bottom: calc(12px + env(safe-area-inset-bottom));
+			transform: translateX(-50%);
+			display: flex;
+			gap: 4px;
+			padding: 6px;
+			border-radius: 999px;
+			border: 1px solid var(--color-border);
 			background-color: var(--color-surface);
+			box-shadow: 0 8px 24px #00000066;
 			z-index: 10;
 		}
 
 		.bottom-nav a {
-			padding: 10px;
-			border-radius: 10px;
-			text-align: center;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 4px;
+			min-width: 112px;
+			padding: 10px 20px;
+			border-radius: 999px;
 			color: var(--color-text-muted);
+			font-size: 0.8125rem;
+			font-weight: 500;
 			text-decoration: none;
 		}
 
